@@ -1,0 +1,7 @@
+{
+  "appid": "touristappid",
+  "projectname": "翠账-微信小程序",
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "setting": { "es6": true, "urlCheck": false, "minified": true }
+}

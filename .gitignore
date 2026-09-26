@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*
+!.env.example
+storage/
+coverage/
+*.log
+*.tsbuildinfo
+postgres/
+.runtime/
+backups/
+miniprogram/project.private.config.json

@@ -1,0 +1,461 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+model Merchant {
+  id String @id @default(uuid())
+  name String
+  ownershipRule String @default("SALE_AND_DELIVERY_TRIAL")
+  createdAt DateTime @default(now())
+  users User[]
+  partners Partner[]
+  locations Location[]
+  goods Good[]
+  loans Loan[]
+  sales Sale[]
+  receipts Receipt[]
+  payables Payable[]
+  payments Payment[]
+  moneyEntries MoneyEntry[]
+  audit AuditLog[]
+}
+
+model User {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  login String @unique
+  name String
+  passwordHash String
+  role String @default("STAFF")
+  permissions Json @default("{}")
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  @@index([merchantId])
+}
+
+model Partner {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  name String
+  externalId String?
+  phone String?
+  roles String[] @default([])
+  note String?
+  settlementType String? // FIXED or RATE
+  settlementRateBp Int?
+  settlementFixedCents BigInt?
+  ruleVersion Int @default(1)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  goodsAsSource Good[] @relation("sourcePartner")
+  goodsAsOwner Good[] @relation("ownerPartner")
+  loans Loan[]
+  sales Sale[]
+  receipts Receipt[]
+  payables Payable[]
+  payments Payment[]
+  moneyEntries MoneyEntry[]
+  @@index([merchantId, name])
+  @@unique([merchantId, externalId])
+}
+
+model Location {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  name String
+  active Boolean @default(true)
+  goods Good[]
+  @@unique([merchantId, name])
+}
+
+model Good {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  code String
+  externalId String?
+  name String
+  category String
+  attributes Json @default("{}")
+  weightGrams Decimal? @db.Decimal(12,3)
+  certificateNo String?
+  conditionNote String?
+  ownershipKind String // OWN or CONSIGN
+  ownerPartnerId String?
+  ownerPartner Partner? @relation("ownerPartner", fields: [ownerPartnerId], references: [id])
+  currentOwnerKind String @default("MERCHANT") // MERCHANT or PARTNER
+  currentOwnerPartnerId String?
+  sourcePartnerId String?
+  sourcePartner Partner? @relation("sourcePartner", fields: [sourcePartnerId], references: [id])
+  costCents BigInt?
+  askingCents BigInt?
+  floorCents BigInt?
+  settlementType String?
+  settlementFixedCents BigInt?
+  settlementRateBp Int?
+  ruleVersion Int?
+  holderKind String @default("MERCHANT") // MERCHANT, PARTNER
+  holderPartnerId String?
+  locationId String?
+  location Location? @relation(fields: [locationId], references: [id])
+  custodianUserId String?
+  quality String @default("NORMAL") // NORMAL, HOLD, DAMAGED
+  occupancy String @default("FREE") // FREE, LOAN, RESERVED, SOLD
+  deliveredAt DateTime?
+  returnedUpstreamAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  images GoodImage[]
+  movements InventoryEvent[]
+  loans LoanItem[]
+  saleItems SaleItem[]
+  damage Damage[]
+  @@unique([merchantId, code])
+  @@unique([merchantId, externalId])
+  @@index([merchantId, occupancy, holderKind])
+}
+
+model GoodImage {
+  id String @id @default(uuid())
+  merchantId String
+  goodId String
+  good Good @relation(fields: [goodId], references: [id])
+  fileName String
+  mimeType String
+  createdAt DateTime @default(now())
+  @@index([merchantId, goodId])
+}
+
+model InventoryEvent {
+  id String @id @default(uuid())
+  merchantId String
+  goodId String
+  good Good @relation(fields: [goodId], references: [id])
+  action String
+  before Json
+  after Json
+  referenceType String
+  referenceId String
+  actorId String
+  reason String?
+  createdAt DateTime @default(now())
+  @@index([merchantId, goodId, createdAt])
+}
+
+model Loan {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  number String
+  partnerId String
+  partner Partner @relation(fields: [partnerId], references: [id])
+  handoverUserId String
+  receiverName String
+  dueAt DateTime?
+  note String?
+  createdAt DateTime @default(now())
+  items LoanItem[]
+  @@unique([merchantId, number])
+}
+
+model LoanItem {
+  id String @id @default(uuid())
+  merchantId String
+  loanId String
+  loan Loan @relation(fields: [loanId], references: [id])
+  goodId String
+  good Good @relation(fields: [goodId], references: [id])
+  status String @default("OUT") // OUT, RETURNED, SOLD, TRANSFERRED
+  referencePriceCents BigInt?
+  agreedSettlementCents BigInt?
+  currentHolderPartnerId String
+  responsiblePartnerId String
+  handedAt DateTime @default(now())
+  resolvedAt DateTime?
+  returnCondition String?
+  transferNote String?
+  @@index([merchantId, status])
+  @@index([merchantId, goodId, status])
+}
+
+model Sale {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  number String
+  customerId String
+  customer Partner @relation(fields: [customerId], references: [id])
+  dueAt DateTime?
+  note String?
+  createdAt DateTime @default(now())
+  items SaleItem[]
+  fees SaleFee[]
+  @@unique([merchantId, number])
+}
+
+model SaleFee {
+  id String @id @default(uuid())
+  merchantId String
+  saleId String
+  sale Sale @relation(fields: [saleId], references: [id])
+  amountCents BigInt
+  reason String
+  actorId String
+  createdAt DateTime @default(now())
+  @@index([merchantId, saleId])
+}
+
+model SaleItem {
+  id String @id @default(uuid())
+  merchantId String
+  saleId String
+  sale Sale @relation(fields: [saleId], references: [id])
+  goodId String
+  good Good @relation(fields: [goodId], references: [id])
+  loanItemId String?
+  grossCents BigInt
+  discountCents BigInt @default(0)
+  netCents BigInt
+  returnedCents BigInt @default(0)
+  paidCents BigInt @default(0)
+  deliveryStatus String @default("PENDING")
+  deliveredAt DateTime?
+  status String @default("ACTIVE")
+  createdAt DateTime @default(now())
+  payable Payable?
+  allocations ReceiptAllocation[]
+  @@index([merchantId, goodId, status])
+}
+
+model Receipt {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  partnerId String
+  partner Partner @relation(fields: [partnerId], references: [id])
+  kind String // SALES, DEPOSIT, ADVANCE
+  amountCents BigInt
+  allocatedCents BigInt @default(0)
+  method String
+  voucherFile String?
+  note String?
+  actorId String
+  receivedAt DateTime @default(now())
+  allocations ReceiptAllocation[]
+  openingAllocations OpeningAllocation[]
+  @@index([merchantId, partnerId, kind])
+}
+
+model ReceiptAllocation {
+  id String @id @default(uuid())
+  merchantId String
+  receiptId String
+  receipt Receipt @relation(fields: [receiptId], references: [id])
+  saleItemId String
+  saleItem SaleItem @relation(fields: [saleItemId], references: [id])
+  amountCents BigInt
+  createdAt DateTime @default(now())
+}
+
+model Payable {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  ownerId String
+  owner Partner @relation(fields: [ownerId], references: [id])
+  saleItemId String @unique
+  saleItem SaleItem @relation(fields: [saleItemId], references: [id])
+  ruleSnapshot Json
+  amountCents BigInt
+  adjustedCents BigInt @default(0)
+  paidCents BigInt @default(0)
+  createdAt DateTime @default(now())
+  allocations PaymentAllocation[]
+  @@index([merchantId, ownerId])
+}
+
+model Payment {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  ownerId String
+  owner Partner @relation(fields: [ownerId], references: [id])
+  amountCents BigInt
+  method String
+  voucherFile String?
+  note String?
+  actorId String
+  paidAt DateTime @default(now())
+  allocations PaymentAllocation[]
+  openingAllocations OpeningAllocation[]
+  @@index([merchantId, ownerId])
+}
+
+model PaymentAllocation {
+  id String @id @default(uuid())
+  merchantId String
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id])
+  payableId String
+  payable Payable @relation(fields: [payableId], references: [id])
+  amountCents BigInt
+}
+
+model MoneyEntry {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  partnerId String
+  partner Partner @relation(fields: [partnerId], references: [id])
+  kind String // DEPOSIT_REFUND, ADVANCE_REFUND, CUSTOMER_REFUND, SUPPLIER_REFUND, OPENING_AR, OPENING_AP, PRICE_ADJUST, SUPPLIER_CREDIT
+  amountCents BigInt
+  appliedCents BigInt @default(0)
+  relatedType String?
+  relatedId String?
+  note String?
+  actorId String
+  createdAt DateTime @default(now())
+  openingAllocations OpeningAllocation[]
+  @@index([merchantId, partnerId, kind])
+}
+
+model OpeningAllocation {
+  id String @id @default(uuid())
+  merchantId String
+  moneyEntryId String
+  moneyEntry MoneyEntry @relation(fields: [moneyEntryId], references: [id])
+  receiptId String?
+  receipt Receipt? @relation(fields: [receiptId], references: [id])
+  paymentId String?
+  payment Payment? @relation(fields: [paymentId], references: [id])
+  amountCents BigInt
+  createdAt DateTime @default(now())
+  @@index([merchantId, moneyEntryId])
+}
+
+model Damage {
+  id String @id @default(uuid())
+  merchantId String
+  goodId String
+  good Good @relation(fields: [goodId], references: [id])
+  discoveredAt DateTime @default(now())
+  description String
+  responsibility String @default("UNCONFIRMED")
+  resolution String?
+  photoFile String?
+  actorId String
+  resolvedAt DateTime?
+}
+
+model Stocktake {
+  id String @id @default(uuid())
+  merchantId String
+  locationId String
+  status String @default("OPEN")
+  actorId String
+  reviewedById String?
+  createdAt DateTime @default(now())
+  closedAt DateTime?
+  items StocktakeItem[]
+  findings StocktakeFinding[]
+  @@index([merchantId, locationId])
+}
+
+model StocktakeItem {
+  id String @id @default(uuid())
+  merchantId String
+  stocktakeId String
+  stocktake Stocktake @relation(fields: [stocktakeId], references: [id])
+  goodId String
+  expectedVersion Int
+  seen Boolean @default(false)
+  note String?
+  @@unique([stocktakeId, goodId])
+}
+
+model StocktakeFinding {
+  id String @id @default(uuid())
+  merchantId String
+  stocktakeId String
+  stocktake Stocktake @relation(fields: [stocktakeId], references: [id])
+  code String
+  goodId String?
+  kind String
+  status String @default("OPEN")
+  resolution String?
+  reviewedById String?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([stocktakeId, code])
+  @@index([merchantId, status])
+}
+
+model ShareLink {
+  id String @id @default(uuid())
+  merchantId String
+  kind String
+  targetId String
+  tokenHash String @unique
+  pinHash String?
+  attempts Int @default(0)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdById String
+  createdAt DateTime @default(now())
+}
+
+model ImportBatch {
+  id String @id @default(uuid())
+  merchantId String
+  kind String
+  fileHash String
+  actorId String
+  createdAt DateTime @default(now())
+  rows ImportRow[]
+  @@unique([merchantId, kind, fileHash])
+}
+
+model ImportRow {
+  id String @id @default(uuid())
+  batchId String
+  batch ImportBatch @relation(fields: [batchId], references: [id])
+  externalId String
+  status String
+  message String?
+  @@unique([batchId, externalId])
+}
+
+model IdempotencyKey {
+  id String @id @default(uuid())
+  merchantId String
+  actorId String
+  key String
+  action String
+  result Json
+  createdAt DateTime @default(now())
+  @@unique([merchantId, actorId, key])
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  actorId String
+  action String
+  entityType String
+  entityId String
+  before Json?
+  after Json?
+  reason String?
+  createdAt DateTime @default(now())
+  @@index([merchantId, createdAt])
+}

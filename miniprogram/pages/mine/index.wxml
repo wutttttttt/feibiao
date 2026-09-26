@@ -1,0 +1,20 @@
+<view class="page">
+  <view class="title">我的</view><view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{mode === 'list'}}">
+    <view class="card"><view class="strong">{{me.name}} · {{me.role === 'OWNER' ? '老板' : '员工'}}</view><view class="sub">连接 {{server}}</view></view>
+    <button wx:if="{{canEditPartners}}" class="button" bindtap="create">＋ 合作方</button>
+    <button wx:if="{{canStocktake}}" class="button secondary" bindtap="openStocktake">盘点任务</button>
+    <button wx:if="{{canDamages}}" class="button secondary" bindtap="openDamages">异常货与货损</button>
+    <view class="section">合作方</view>
+    <view wx:for="{{partners}}" wx:key="id" class="card"><view class="strong">{{item.name}}</view><view class="muted">{{item.phone || '未留电话'}} · {{item.rolesText}}</view></view>
+    <view class="card muted">货权规则为试用配置：确认成交且交付后转给买家。正式使用前请老板确认。</view>
+    <button class="button secondary" bindtap="logout">退出登录</button>
+  </view>
+  <view wx:else class="card">
+    <view class="section">新增合作方</view>
+    <view class="field">名称<input class="input" value="{{name}}" data-field="name" bindinput="edit" /></view>
+    <view class="field">电话<input class="input" value="{{phone}}" data-field="phone" bindinput="edit" /></view>
+    <view class="field">身份<picker class="picker" range="{{roleChoices}}" bindchange="role">{{roleIndex === 0 ? '客户' : roleIndex === 1 ? '上游货主' : '客户兼上游货主'}}</picker></view>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="save">保存合作方</button><button class="button secondary" bindtap="back">返回</button>
+  </view>
+</view>

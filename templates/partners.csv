@@ -1,0 +1,2 @@
+externalId,name,phone,roles,settlementType,settlementRateBp,settlementFixed,note
+P-001,示例上游货主,13800000000,OWNER,RATE,8000,,仅演示，导入前请修改

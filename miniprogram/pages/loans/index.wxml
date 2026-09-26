@@ -1,0 +1,49 @@
+<view class="page">
+  <view class="title">拿货单</view>
+  <view wx:if="{{mode === 'list'}}">
+    <button class="button" bindtap="create">＋ 客户拿货</button>
+    <view wx:for="{{loans}}" wx:key="id" class="card">
+      <view class="strong">{{item.number}} · {{item.partner.name}}</view>
+      <view class="muted">接收人 {{item.receiverName}}</view>
+      <view class="divider"></view>
+      <view wx:for="{{item.items}}" wx:for-item="piece" wx:key="id" class="row" style="margin:12rpx 0">
+        <view>{{piece.good.code}} · {{piece.good.name}}</view><button class="button small secondary" data-id="{{piece.id}}" bindtap="openItem">{{piece.statusText}}</button>
+      </view>
+    </view>
+    <view wx:if="{{loans.length === 0}}" class="empty">暂无拿货单</view>
+  </view>
+  <view wx:elif="{{mode === 'create'}}" class="card">
+    <view class="section">交接货品</view>
+    <view class="field">客户<picker class="picker" range="{{partners}}" range-key="name" bindchange="customer">{{customerIndex >= 0 ? partners[customerIndex].name : '请选择客户'}}</picker></view>
+    <view class="field">实际接收人<input class="input" value="{{receiverName}}" data-field="receiverName" bindinput="edit" /></view>
+    <view class="field">约定归还日<picker class="picker" mode="date" bindchange="edit" data-field="dueAt">{{dueAt || '可选'}}</picker></view>
+    <view class="field">备注<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+    <view class="two"><input class="search grow" placeholder="货号或名称" value="{{query}}" data-field="query" bindinput="edit" /><button class="button secondary" bindtap="scan">扫码选货</button></view>
+    <view wx:for="{{candidates}}" wx:key="id" class="pill" data-id="{{item.id}}" bindtap="toggle">{{item.code}} {{item.name}}</view>
+    <view class="section">已选 {{selected.length}} 件</view>
+    <view wx:for="{{selected}}" wx:key="id" class="row field"><view>{{item.code}}</view><input class="input" style="width:210rpx" type="digit" value="{{item.price}}" data-id="{{item.id}}" bindinput="price" placeholder="参考价 元" /></view>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="save">确认交接</button><button class="button secondary" bindtap="back">返回</button>
+  </view>
+  <view wx:elif="{{mode === 'item'}}" class="card">
+    <view class="section">{{item.good.code}} · {{item.good.name}}</view>
+    <view class="sub">状态 {{item.statusText}}</view>
+    <view wx:if="{{item.status === 'OUT'}}">
+      <view class="field">验货结果<picker class="picker" range="{{conditionChoices}}" bindchange="condition">{{condition === 'NORMAL' ? '正常' : '货损待处理'}}</picker></view>
+      <view class="field">归还位置<picker class="picker" range="{{locations}}" range-key="name" bindchange="location">{{locationIndex >= 0 ? locations[locationIndex].name : '默认位置'}}</picker></view>
+      <view class="field">验货说明<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+      <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="returnItem">确认归还验货</button>
+      <button class="button secondary" bindtap="goSale">转到成交</button>
+      <button wx:if="{{canTransfer}}" class="button secondary" bindtap="showTransfer">登记转交</button>
+    </view>
+    <button class="button secondary" bindtap="back">返回拿货单</button>
+  </view>
+  <view wx:else class="card">
+    <view class="section">{{item.good.code}} · 转交记录</view>
+    <view class="field">核实情况<picker class="picker" range="{{transferChoices}}" bindchange="transferKind">{{transferChoices[transferConfirmed]}}</picker></view>
+    <view wx:if="{{transferConfirmed === 1}}" class="field">实际接收人<picker class="picker" range="{{partners}}" range-key="name" bindchange="transferReceiver">{{transferIndex >= 0 ? partners[transferIndex].name : '请选择'}}</picker></view>
+    <view class="field">交接记录或待核实线索<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+    <view class="notice">仅登记线索时，原拿货人继续负责。确认承接后，责任才转给实际接收人。</view>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="saveTransfer">保存转交</button>
+    <button class="button secondary" bindtap="back">返回拿货单</button>
+  </view>
+</view>

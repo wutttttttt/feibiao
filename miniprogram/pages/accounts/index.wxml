@@ -1,0 +1,72 @@
+<view class="page">
+  <view class="title">往来账</view><view wx:if="{{error}}" class="error">{{error}}</view>
+  <view wx:if="{{mode === 'list'}}">
+    <view class="two"><button wx:if="{{canSales}}" class="button" bindtap="createSale">＋ 确认成交</button><button wx:if="{{canReceipts}}" class="button secondary" bindtap="createReceipt">登记收款</button></view>
+    <view class="section">客户成交</view>
+    <view wx:for="{{sales}}" wx:key="id" class="card">
+      <view class="row"><view class="strong">{{item.number}}</view><view>{{item.customer.name}}</view></view>
+      <view wx:for="{{item.items}}" wx:for-item="piece" wx:key="id" class="row" style="margin-top:16rpx">
+        <view class="grow"><view>{{piece.good.code}} · {{piece.good.name}}</view><view class="muted">成交 {{piece.netText}} · 未收 {{piece.unpaidText}}</view></view>
+        <button class="button small secondary" data-id="{{piece.id}}" bindtap="openItem">处理</button>
+      </view>
+    </view>
+    <view wx:if="{{sales.length === 0}}" class="empty">暂无成交记录</view>
+    <view class="section">收款与押金</view>
+    <view wx:for="{{receipts}}" wx:key="id" class="card row">
+      <view class="grow"><view class="strong">{{item.partner.name}} · {{item.kind === 'SALES' ? '销售款' : item.kind === 'DEPOSIT' ? '押金' : '预付款'}}</view><view class="muted">实收 {{item.amountText}} · 未分配 {{item.availableText}}</view></view>
+      <button wx:if="{{item.hasBalance}}" class="button small secondary" data-id="{{item.id}}" bindtap="openReceipt">核销</button>
+    </view>
+  </view>
+  <view wx:elif="{{mode === 'sale'}}" class="card">
+    <view class="section">逐件确认成交</view>
+    <view class="field">客户<picker class="picker" range="{{partners}}" range-key="name" bindchange="customer">{{customerIndex >= 0 ? partners[customerIndex].name : '请选择客户'}}</picker></view>
+    <view class="field">整单优惠（元）<input class="input" type="digit" value="{{discount}}" data-field="discount" bindinput="edit" /></view>
+    <view class="field">是否已交付<picker class="picker" range="{{deliveryChoices}}" bindchange="delivered">{{deliveredIndex === 0 ? '尚未交付' : '已交付'}}</picker></view>
+    <view class="two"><input class="search grow" placeholder="货号或名称" value="{{query}}" data-field="query" bindinput="edit" /><button class="button secondary" bindtap="scan">扫码选货</button></view>
+    <view wx:for="{{candidates}}" wx:key="id" class="pill" data-id="{{item.id}}" bindtap="toggle">{{item.code}} {{item.name}}</view>
+    <view class="section">已选 {{selected.length}} 件</view>
+    <view wx:for="{{selected}}" wx:key="id" class="row field"><view>{{item.code}}</view><input class="input" style="width:210rpx" type="digit" value="{{item.price}}" data-id="{{item.id}}" bindinput="price" placeholder="成交价 元" /></view>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="saveSale">确认成交</button><button class="button secondary" bindtap="back">返回</button>
+  </view>
+  <view wx:elif="{{mode === 'receipt'}}" class="card">
+    <view class="section">登记实际收款</view>
+    <view class="field">付款客户<picker class="picker" range="{{partners}}" range-key="name" bindchange="customer">{{customerIndex >= 0 ? partners[customerIndex].name : '请选择客户'}}</picker></view>
+    <view class="field">款项性质<picker class="picker" range="{{kindChoices}}" bindchange="kind">{{kindIndex === 0 ? '销售货款' : kindIndex === 1 ? '货物押金' : '预付款'}}</picker></view>
+    <view class="field">实收金额（元）<input class="input" type="digit" value="{{amount}}" data-field="amount" bindinput="edit" /></view>
+    <view class="field">方式<input class="input" value="{{method}}" data-field="method" bindinput="edit" /></view>
+    <view class="field">备注<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+    <view class="notice">登记收款后，销售货款仍需逐件核销；押金和预付款不会自动变成货款。</view>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="saveReceipt">确认收款</button><button class="button secondary" bindtap="back">返回</button>
+  </view>
+  <view wx:elif="{{mode === 'saleItem'}}" class="card">
+    <view class="section">{{saleItem.good.code}} · {{saleItem.good.name}}</view>
+    <view class="muted">{{saleItem.deliveryStatus === 'DELIVERED' ? '已交付' : '未交付'}} · 未收 {{saleItem.unpaidText}}</view>
+    <block wx:if="{{canSales}}"><button wx:if="{{saleItem.deliveryStatus === 'PENDING'}}" class="button" bindtap="deliver">登记交付</button></block>
+    <button wx:if="{{canReturns}}" class="button secondary" bindtap="showReturn">销售退货 / 改价退款</button>
+    <button class="button secondary" bindtap="back">返回</button>
+  </view>
+  <view wx:elif="{{mode === 'return'}}" class="card">
+    <view class="section">销售退货 / 改价退款</view>
+    <view class="field">实物<picker class="picker" range="{{physicalChoices}}" bindchange="physical">{{physicalIndex === 0 ? '实物退回' : '不退回，仅调价'}}</picker></view>
+    <view class="field">应收调整金额（元）<input class="input" type="digit" value="{{amount}}" data-field="amount" bindinput="edit" /></view>
+    <view class="field">实际已退现金（元）<input class="input" type="digit" value="{{refund}}" data-field="refund" bindinput="edit" /></view>
+    <view class="field">验货<picker class="picker" range="{{damageChoices}}" bindchange="damage">{{damageIndex === 0 ? '正常' : '货损待处理'}}</picker></view>
+    <view class="field">原因<input class="input" value="{{reason}}" data-field="reason" bindinput="edit" /></view>
+    <button class="button warn" disabled="{{busy}}" loading="{{busy}}" bindtap="saveReturn">确认调整</button><button class="button secondary" bindtap="back">返回</button>
+  </view>
+  <view wx:elif="{{mode === 'allocate'}}" class="card">
+    <view class="section">核销 {{receipt.partner.name}} 的款项</view><view class="notice">可用余额 {{receipt.availableText}}</view>
+    <view class="field">待收货品<picker class="picker" range="{{targets}}" range-key="name" bindchange="target">{{targetIndex >= 0 ? targets[targetIndex].name : '请选择货品'}}</picker></view>
+    <view class="field">核销金额（元）<input class="input" type="digit" value="{{amount}}" data-field="amount" bindinput="edit" /></view>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="allocate">确认核销</button><button class="button secondary" bindtap="back">返回</button>
+    <button wx:if="{{receipt.kind !== 'SALES'}}" class="button warn" bindtap="showRefund">退还剩余押金 / 预付款</button>
+  </view>
+  <view wx:else class="card">
+    <view class="section">退还 {{receipt.partner.name}} 的{{receipt.kind === 'DEPOSIT' ? '押金' : '预付款'}}</view>
+    <view class="notice">可退余额 {{receipt.availableText}}</view>
+    <view class="field">实际退款金额（元）<input class="input" type="digit" value="{{amount}}" data-field="amount" bindinput="edit" /></view>
+    <view class="field">退款原因<input class="input" value="{{reason}}" data-field="reason" bindinput="edit" /></view>
+    <button class="button warn" disabled="{{busy}}" loading="{{busy}}" bindtap="saveRefund">确认退款</button>
+    <button class="button secondary" bindtap="back">返回</button>
+  </view>
+</view>

@@ -1,0 +1,11 @@
+<view class="page">
+  <view class="title">翠账</view><view class="sub">翡翠摊主管货与对账 · 微信小程序</view>
+  <view class="card">
+    <view class="field">服务器地址<input class="input" value="{{baseUrl}}" data-field="baseUrl" bindinput="edit" placeholder="https://您的业务域名" /></view>
+    <view class="field">账号<input class="input" value="{{login}}" data-field="login" bindinput="edit" /></view>
+    <view class="field">密码<input class="input" value="{{password}}" data-field="password" bindinput="edit" password="true" /></view>
+    <view wx:if="{{error}}" class="error">{{error}}</view>
+    <button class="button" loading="{{busy}}" disabled="{{busy}}" bindtap="submit">登录</button>
+  </view>
+  <view class="sub">开发者工具可连接本机地址；手机访问须使用已在微信后台登记的 HTTPS 域名。</view>
+</view>

@@ -1,0 +1,34 @@
+<view class="page">
+  <view class="title">货品</view>
+  <view wx:if="{{mode === 'list'}}">
+    <view class="two"><button wx:if="{{canGoods}}" class="button" bindtap="scanInbound">扫码入库</button><button class="button secondary" bindtap="scan">扫码查货</button></view>
+    <button wx:if="{{canGoods}}" class="button secondary" bindtap="showCreate">＋ 手工录货</button>
+    <input class="search" placeholder="货号、名称或品类" value="{{query}}" bindinput="search" />
+    <view wx:for="{{visible}}" wx:key="id" class="card row" data-id="{{item.id}}" bindtap="open">
+      <view class="grow"><view class="strong code">{{item.code}} · {{item.name}}</view><view class="muted">{{item.category}} · {{item.state}} · {{item.ownershipKind === 'OWN' ? '自有' : '寄售'}}</view></view><view>{{item.askingText}} ›</view>
+    </view>
+    <view wx:if="{{visible.length === 0}}" class="empty">没有找到货品</view>
+  </view>
+  <view wx:elif="{{mode === 'create'}}" class="card">
+    <view class="section">新货入库</view>
+    <view class="field">货号（留空自动生成）<input class="input" data-field="code" value="{{form.code}}" placeholder="扫码或手工输入货号" bindinput="edit" /></view>
+    <button class="button secondary" bindtap="scanInbound">扫码填货号</button>
+    <view class="field">名称<input class="input" data-field="name" value="{{form.name}}" bindinput="edit" /></view>
+    <view class="field">品类<input class="input" data-field="category" value="{{form.category}}" bindinput="edit" /></view>
+    <view class="field">货权类型<picker class="picker" range="{{ownershipChoices}}" bindchange="ownership">{{form.ownershipKind === 'OWN' ? '自有货' : '寄售货'}}</picker></view>
+    <view wx:if="{{form.ownershipKind === 'CONSIGN'}}" class="field">上游货主<picker class="picker" range="{{partners}}" range-key="name" bindchange="owner">{{ownerIndex >= 0 ? partners[ownerIndex].name : '请选择'}}</picker></view>
+    <view class="field">存放位置<picker class="picker" range="{{locations}}" range-key="name" bindchange="location">{{locationIndex >= 0 ? locations[locationIndex].name : '默认位置'}}</picker></view>
+    <view class="field">报价（元）<input class="input" data-field="asking" type="digit" value="{{form.asking}}" bindinput="edit" /></view>
+    <button class="button" loading="{{busy}}" disabled="{{busy}}" bindtap="save">保存货品</button><button class="button secondary" bindtap="back">返回</button>
+  </view>
+  <view wx:else class="card">
+    <view class="section">{{detail.code}} · {{detail.name}}</view>
+    <image wx:if="{{photo}}" src="{{photo}}" mode="aspectFill" style="width:100%;height:420rpx;border-radius:18rpx" />
+    <view class="muted">{{detail.category}} · {{detail.ownershipKind === 'OWN' ? '自有货' : '寄售货'}}</view>
+    <view class="money">报价 {{detail.askingCents == null ? '—' : detail.askingCents}} 元</view>
+    <view class="sub">状态 {{detail.occupancy}} · 品质 {{detail.quality}}</view>
+    <view class="two"><button wx:if="{{canGoods}}" class="button" bindtap="addPhoto">拍照 / 上传</button><block wx:if="{{canSales}}"><button wx:if="{{detail.occupancy === 'FREE' || detail.occupancy === 'RESERVED'}}" class="button secondary" bindtap="reserve">{{detail.occupancy === 'RESERVED' ? '取消预留' : '预留货品'}}</button></block></view>
+    <button class="button secondary" bindtap="back">返回货品列表</button>
+    <view class="section">流转记录</view><view wx:for="{{detail.movements}}" wx:key="id" class="muted">{{item.action}} · {{item.reason}}</view>
+  </view>
+</view>

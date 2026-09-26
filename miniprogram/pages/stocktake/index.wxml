@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="title">盘点</view>
+  <view wx:if="{{!active}}">
+    <view class="card"><view class="section">新建位置盘点</view>
+      <picker class="picker" range="{{locations}}" range-key="name" bindchange="location">{{locationIndex >= 0 ? locations[locationIndex].name : '选择位置'}}</picker>
+      <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="create">生成账面快照</button>
+    </view>
+    <view class="section">盘点记录</view>
+    <view wx:for="{{takes}}" wx:key="id" class="card row" data-id="{{item.id}}" bindtap="open">
+      <view><view class="strong">{{item.locationName}} · {{item.status === 'OPEN' ? '进行中' : '已结束'}}</view><view class="muted">已核对 {{item.checked}} / {{item.count}} 件</view></view><view>›</view>
+    </view>
+  </view>
+  <view wx:else>
+    <view class="card"><view class="section">{{active.locationName}} · {{active.status === 'OPEN' ? '进行中' : '已结束'}}</view><view class="muted">已核对 {{active.checked}} / {{active.count}} 件；外借货不在此位置快照内。</view></view>
+    <view wx:if="{{active.status === 'OPEN'}}" class="card">
+      <view class="two"><input class="search grow" placeholder="输入货号" value="{{code}}" bindinput="edit" /><button class="button secondary" bindtap="scan">扫码</button></view>
+      <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="mark">核对这件货</button>
+      <view wx:if="{{result}}" class="notice">{{result}}</view>
+    </view>
+    <view wx:for="{{active.items}}" wx:key="id" class="card row"><view><view class="strong">{{item.code}} · {{item.name}}</view><view class="muted">{{item.state}}</view></view><view>{{item.seen ? '✓' : '待查'}}</view></view>
+    <view wx:if="{{active.findings.length}}" class="section">多货与错位差异（{{active.findings.length}}）</view>
+    <view wx:for="{{active.findings}}" wx:key="id" class="card row"><view><view class="strong">{{item.code}}</view><view class="muted">{{item.kindText}} · 待复核</view></view><button wx:if="{{canClose}}" class="button small secondary" data-id="{{item.id}}" bindtap="selectFinding">处理</button></view>
+    <view wx:if="{{selectedFinding}}" class="card"><view class="section">复核 {{selectedFinding.code}}</view><view class="field">处理方式<picker class="picker" range="{{dispositionChoices}}" bindchange="disposition">{{dispositionChoices[dispositionIndex]}}</picker></view><view class="field">处置说明<input class="input" value="{{findingReason}}" bindinput="editFindingReason" placeholder="说明实物与账面差异" /></view><button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="resolveFinding">记录差异处置</button></view>
+    <view wx:if="{{showClose}}" class="card"><view class="field">老板复核说明<input class="input" value="{{reviewReason}}" bindinput="editReason" placeholder="说明差异原因与处置依据" /></view><button class="button warn" disabled="{{busy}}" bindtap="close">确认复核并结束</button></view>
+    <button class="button secondary" bindtap="back">返回盘点记录</button>
+  </view>
+</view>

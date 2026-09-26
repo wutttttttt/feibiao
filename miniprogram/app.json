@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/home/index", "pages/goods/index", "pages/loans/index",
+    "pages/accounts/index", "pages/mine/index", "pages/login/index", "pages/stocktake/index", "pages/damages/index"
+  ],
+  "window": { "navigationBarTitleText": "翠账", "navigationBarBackgroundColor": "#0b5945", "navigationBarTextStyle": "white", "backgroundColor": "#f4f7f5" },
+  "tabBar": {
+    "color": "#60796e", "selectedColor": "#086d52", "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "首页" },
+      { "pagePath": "pages/goods/index", "text": "货品" },
+      { "pagePath": "pages/loans/index", "text": "拿货单" },
+      { "pagePath": "pages/accounts/index", "text": "往来账" },
+      { "pagePath": "pages/mine/index", "text": "我的" }
+    ]
+  }
+}
