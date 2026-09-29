@@ -2,6 +2,8 @@
 
 面向单个瑞丽翡翠摊主的本地系统。货品一物一码，拿货、成交、交付与收付款分开记录；自有货和寄售货分别核算。界面在手机、电脑浏览器及原生微信小程序中使用。小程序源码与接入说明见 [微信小程序](./docs/微信小程序.md)，第三方打印机设置见 [标签打印](./docs/标签打印.md)。
 
+Linux 云服务器部署见 [Linux 部署说明](./docs/Linux部署.md)。
+
 ## 本机首次启动（Windows PowerShell）
 
 需要 Node.js 24、PostgreSQL 17 Windows 二进制包。将 [PostgreSQL 官方推荐的 EDB 二进制包](https://www.postgresql.org/download/windows/)解压到项目 `.runtime/postgres`，使 `.runtime/postgres/pgsql/bin/initdb.exe` 存在。下载包无需提交到源码。

@@ -36,6 +36,31 @@ async function location(tx: Tx, actor: Actor, id: string) {
   if (!result) throw new AppError(404, '找不到存放位置');
   return result;
 }
+async function refreshIntake(tx: Tx, intakeId: string) {
+  const items = await tx.intakeItem.findMany({ where: { intakeId }, select: { status: true } });
+  const status = items.some(i => i.status === 'PENDING') ? 'RECEIVING' : items.some(i => i.status === 'ACTIVE') ? 'ACTIVE' : 'CLOSED';
+  return tx.intake.update({ where: { id: intakeId }, data: { status } });
+}
+function dueDate(value: unknown) {
+  const raw = asString(value, '应还日期');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new AppError(400, '应还日期格式无效');
+  const due = new Date(`${raw}T23:59:59.999+08:00`);
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+  if (Number.isNaN(due.getTime()) || due.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }) !== raw || due < new Date(`${today}T00:00:00+08:00`)) throw new AppError(400, '应还日期无效或早于今天');
+  return due;
+}
+function intakeTerms(input: any, owner: { settlementType: string | null; settlementFixedCents: bigint | null; settlementRateBp: number | null; ruleVersion: number }) {
+  const type = input.settlementType || owner.settlementType;
+  const fixed = input.settlementFixed == null || input.settlementFixed === '' ? owner.settlementFixedCents : money(input.settlementFixed, '固定结算价');
+  const rate = input.settlementRateBp == null || input.settlementRateBp === '' ? owner.settlementRateBp : Number(input.settlementRateBp);
+  if (type != null && !['FIXED','RATE'].includes(type)) throw new AppError(400, '结算方式无效');
+  if (fixed != null && fixed < 0n) throw new AppError(400, '固定结算价不能小于0');
+  if (rate != null && (!Number.isInteger(rate) || rate < 0 || rate > 10000)) throw new AppError(400, '分成比例无效');
+  return { settlementType: type || null, settlementFixedCents: fixed ?? null, settlementRateBp: rate ?? null, ruleVersion: owner.ruleVersion };
+}
+function completeTerms(g: Good) {
+  return g.settlementType === 'FIXED' ? g.settlementFixedCents != null : g.settlementType === 'RATE' && g.settlementRateBp != null;
+}
 
 export async function createPartner(actor: Actor, input: any) {
   requirePermission(actor, 'partners');
@@ -146,6 +171,96 @@ export async function createLoan(actor: Actor, input: any) {
     return tx.loan.findUniqueOrThrow({ where: { id: loan.id }, include: { items: true } });
   });
 }
+export async function createIntake(actor: Actor, input: any) {
+  requirePermission(actor, 'loans');
+  if (!Array.isArray(input.items) || !input.items.length) throw new AppError(400, '请逐件填写实际到货');
+  if (input.items.some((i:any) => i.declared !== undefined && i.declared !== '' || i.settlementType || i.settlementFixed !== undefined && i.settlementFixed !== '' || i.settlementRateBp !== undefined && i.settlementRateBp !== '' || i.floor !== undefined && i.floor !== '')) requirePermission(actor, 'cost');
+  const dueAt = dueDate(input.dueAt);
+  return transact(async tx => {
+    const owner = await partner(tx, actor, asString(input.partnerId, '上游货主'));
+    if (!owner.roles.some(r => r === 'OWNER' || r === 'SUPPLIER')) throw new AppError(400, '借入合作方必须是上游货主或采购来源');
+    const place = await location(tx, actor, asString(input.locationId, '暂存位置'));
+    const intake = await tx.intake.create({ data: { merchantId: actor.merchantId, number: docNo('SH'), partnerId: owner.id, locationId: place.id, receiverName: asString(input.receiverName, '实际交货人'), dueAt, note: input.note || null, actorId: actor.id } });
+    const identities = new Set<string>();
+    for (const [index, raw] of input.items.entries()) {
+      if (!raw || typeof raw !== 'object') throw new AppError(400, `第${index + 1}件货资料无效`);
+      const identity = raw.existingGoodId ? `id:${raw.existingGoodId}` : raw.code ? `code:${raw.code}` : `new:${index}`;
+      if (identities.has(identity)) throw new AppError(400, '同一件货不能重复收货');
+      identities.add(identity);
+      const terms = intakeTerms(raw, owner);
+      let g: Good;
+      let before: Good | null = null;
+      if (raw.existingGoodId) {
+        if (['code','name','category','attributes','weightGrams','certificateNo','asking'].some(key => raw[key] != null && raw[key] !== '')) throw new AppError(400, `第${index + 1}件不能同时填写原货品和新货资料`);
+        before = await lockGood(tx, actor, asString(raw.existingGoodId, '已有货品'));
+        if (before.ownershipKind !== 'CONSIGN' || before.ownerPartnerId !== owner.id || !before.returnedUpstreamAt || before.holderKind !== 'PARTNER') throw new AppError(409, `${before.code} 不是该货主已退回的寄售货`);
+        g = await tx.good.update({ where: { id: before.id }, data: { ...terms, holderKind: 'MERCHANT', holderPartnerId: null, locationId: place.id, custodianUserId: actor.id, occupancy: 'INBOUND', returnedUpstreamAt: null, version: { increment: 1 } } });
+      } else {
+        const code = raw.code ? asString(raw.code, '货号') : docNo('FC');
+        g = await tx.good.create({ data: { merchantId: actor.merchantId, code, name: asString(raw.name, '货品名称'), category: asString(raw.category, '品类'), attributes: json(raw.attributes || {}), weightGrams: raw.weightGrams ? new Prisma.Decimal(String(raw.weightGrams)) : null, certificateNo: raw.certificateNo || null, conditionNote: raw.conditionNote || null, ownershipKind: 'CONSIGN', ownerPartnerId: owner.id, currentOwnerKind: 'PARTNER', currentOwnerPartnerId: owner.id, sourcePartnerId: owner.id, askingCents: raw.asking ? money(raw.asking, '对外报价') : null, floorCents: raw.floor ? money(raw.floor, '底价') : null, ...terms, holderKind: 'MERCHANT', locationId: place.id, custodianUserId: actor.id, occupancy: 'INBOUND' } });
+      }
+      const declared = raw.declared == null || raw.declared === '' ? null : money(raw.declared, '货主报价');
+      if (declared != null && declared < 0n) throw new AppError(400, '货主报价不能小于0');
+      const item = await tx.intakeItem.create({ data: { merchantId: actor.merchantId, intakeId: intake.id, goodId: g.id, lineNo: index + 1, declaredCents: declared, conditionNote: raw.conditionNote || null } });
+      await tx.inventoryEvent.create({ data: { merchantId: actor.merchantId, goodId: g.id, action: before ? 'RE_RECEIPT' : 'INTAKE_RECEIPT', before: json(before ? state(before) : {}), after: json(state(g)), referenceType: 'INTAKE_ITEM', referenceId: item.id, actorId: actor.id } });
+    }
+    await audit(tx, actor, 'CREATE', 'INTAKE', intake.id, null, { partnerId: owner.id, count: input.items.length, dueAt });
+    return tx.intake.findUniqueOrThrow({ where: { id: intake.id }, include: { items: { include: { good: true } }, partner: true, location: true } });
+  });
+}
+export async function checkInIntakeItem(actor: Actor, itemId: string, input: any) {
+  requirePermission(actor, 'loans');
+  const result = ['NORMAL','DAMAGED','REJECTED'].includes(input.result) ? input.result : null;
+  if (!result) throw new AppError(400, '入库核对结果无效');
+  const note = result === 'NORMAL' ? input.note || null : asString(input.note, '核对说明');
+  return transact(async tx => {
+    const item = await tx.intakeItem.findFirst({ where: { id: itemId, merchantId: actor.merchantId, status: 'PENDING' }, include: { intake: true } });
+    if (!item) throw new AppError(409, '该货已核对或不存在');
+    let g = await lockGood(tx, actor, item.goodId);
+    if (g.occupancy !== 'INBOUND' || g.holderKind !== 'MERCHANT') throw new AppError(409, '货品与收货单状态不一致');
+    if (input.settlementType !== undefined || input.settlementFixed !== undefined || input.settlementRateBp !== undefined) {
+      requirePermission(actor, 'cost');
+      const owner = await tx.partner.findFirstOrThrow({ where: { id: item.intake.partnerId, merchantId: actor.merchantId } });
+      g = await tx.good.update({ where: { id: g.id }, data: intakeTerms(input, owner) });
+    }
+    if (result !== 'REJECTED' && !completeTerms(g)) throw new AppError(409, '请先补齐固定结算价或比例分成');
+    const now = new Date();
+    if (result === 'REJECTED') {
+      await tx.intakeItem.update({ where: { id: item.id }, data: { status: 'REJECTED', checkedAt: now, returnedAt: now, conditionNote: note } });
+      await move(tx, actor, g, { occupancy: 'FREE', holderKind: 'PARTNER', holderPartnerId: item.intake.partnerId, locationId: null, custodianUserId: null, returnedUpstreamAt: now }, 'INTAKE_REJECT', 'INTAKE_ITEM', item.id, note);
+    } else {
+      const damaged = result === 'DAMAGED';
+      await tx.intakeItem.update({ where: { id: item.id }, data: { status: 'ACTIVE', checkedAt: now, conditionNote: note || item.conditionNote } });
+      await move(tx, actor, g, { occupancy: 'FREE', quality: damaged ? 'HOLD' : 'NORMAL' }, damaged ? 'INTAKE_DAMAGE' : 'INTAKE_CONFIRMED', 'INTAKE_ITEM', item.id, note || undefined);
+      if (damaged) await tx.damage.create({ data: { merchantId: actor.merchantId, goodId: g.id, description: note!, actorId: actor.id } });
+    }
+    await refreshIntake(tx, item.intakeId);
+    await audit(tx, actor, 'CHECK_IN', 'INTAKE_ITEM', item.id, item, { result, note }, note || undefined);
+    return { id: item.id, status: result === 'REJECTED' ? 'REJECTED' : 'ACTIVE', result };
+  });
+}
+export async function returnIntakeItems(actor: Actor, intakeId: string, input: any) {
+  requirePermission(actor, 'loans');
+  const itemIds = ids(input.itemIds, '退还货品');
+  const reason = asString(input.reason, '退还原因');
+  return transact(async tx => {
+    const intake = await tx.intake.findFirst({ where: { id: intakeId, merchantId: actor.merchantId } });
+    if (!intake) throw new AppError(404, '借入单不存在');
+    const items = await tx.intakeItem.findMany({ where: { id: { in: itemIds }, intakeId, merchantId: actor.merchantId, status: 'ACTIVE' } });
+    if (items.length !== itemIds.length) throw new AppError(409, '所选货品包含不可退还项目');
+    for (const item of [...items].sort((a,b) => a.goodId.localeCompare(b.goodId))) {
+      const g = await lockGood(tx, actor, item.goodId);
+      if (g.occupancy !== 'FREE' || g.holderKind !== 'MERCHANT' || g.returnedUpstreamAt) throw new AppError(409, `${g.code} 当前不在手，不能退上游`);
+      if (await tx.damage.findFirst({ where: { merchantId: actor.merchantId, goodId: g.id, resolvedAt: null } })) throw new AppError(409, `${g.code} 尚有未处理货损`);
+      const now = new Date();
+      await tx.intakeItem.update({ where: { id: item.id }, data: { status: 'RETURNED', returnedAt: now } });
+      await move(tx, actor, g, { holderKind: 'PARTNER', holderPartnerId: intake.partnerId, locationId: null, custodianUserId: null, returnedUpstreamAt: now }, 'RETURN_UPSTREAM', 'INTAKE_ITEM', item.id, reason);
+    }
+    await refreshIntake(tx, intake.id);
+    await audit(tx, actor, 'RETURN', 'INTAKE', intake.id, null, { itemIds }, reason);
+    return { returned: itemIds.length };
+  });
+}
 export async function returnLoanItem(actor: Actor, loanItemId: string, input: any) {
   requirePermission(actor, 'loans');
   return transact(async tx => {
@@ -207,10 +322,12 @@ export async function createSale(actor: Actor, input: any) {
       const loanItem = g.occupancy === 'LOAN' ? await tx.loanItem.findFirst({ where: { merchantId: actor.merchantId, goodId: g.id, status: 'OUT', currentHolderPartnerId: customer.id } }) : null;
       if (g.occupancy === 'LOAN' && !loanItem) throw new AppError(409, `${g.code} 正由其他人持有`);
       if (g.occupancy !== 'LOAN' && !(g.holderKind === 'MERCHANT' && ['FREE','RESERVED'].includes(g.occupancy))) throw new AppError(409, `${g.code} 已被占用`);
+      const intakeItem = await tx.intakeItem.findFirst({ where: { merchantId: actor.merchantId, goodId: g.id, status: 'ACTIVE' } });
       const net = item.gross - item.discount;
       const delivered = Boolean(loanItem || input.delivered);
-      const row = await tx.saleItem.create({ data: { merchantId: actor.merchantId, saleId: sale.id, goodId: g.id, loanItemId: loanItem?.id, grossCents: item.gross, discountCents: item.discount, netCents: net, deliveryStatus: delivered ? 'DELIVERED' : 'PENDING', deliveredAt: delivered ? new Date() : null } });
+      const row = await tx.saleItem.create({ data: { merchantId: actor.merchantId, saleId: sale.id, goodId: g.id, loanItemId: loanItem?.id, intakeItemId: intakeItem?.id, grossCents: item.gross, discountCents: item.discount, netCents: net, deliveryStatus: delivered ? 'DELIVERED' : 'PENDING', deliveredAt: delivered ? new Date() : null } });
       if (loanItem) await tx.loanItem.update({ where: { id: loanItem.id }, data: { status: 'SOLD', resolvedAt: new Date() } });
+      if (intakeItem) { await tx.intakeItem.update({ where: { id: intakeItem.id }, data: { status: 'SOLD', soldAt: new Date() } }); await refreshIntake(tx, intakeItem.intakeId); }
       await move(tx, actor, g, { occupancy: 'SOLD', holderKind: delivered ? 'PARTNER' : 'MERCHANT', holderPartnerId: delivered ? customer.id : null, currentOwnerKind: delivered ? 'PARTNER' : g.currentOwnerKind, currentOwnerPartnerId: delivered ? customer.id : g.currentOwnerPartnerId, deliveredAt: delivered ? new Date() : null, locationId: delivered ? null : g.locationId }, 'SALE', 'SALE_ITEM', row.id);
       if (g.ownershipKind === 'CONSIGN') {
         if (!g.ownerPartnerId || !g.settlementType) throw new AppError(400, `${g.code} 缺少上游结算资料`);
@@ -396,6 +513,10 @@ export async function returnSaleItem(actor: Actor, saleItemId: string, input: an
       await move(tx, actor, g, { occupancy: full ? 'FREE' : 'SOLD', holderKind: 'MERCHANT', holderPartnerId: null, currentOwnerKind: g.ownershipKind === 'CONSIGN' ? 'PARTNER' : 'MERCHANT', currentOwnerPartnerId: g.ownershipKind === 'CONSIGN' ? g.ownerPartnerId : null, locationId: input.locationId || null, quality: input.damaged ? 'HOLD' : 'NORMAL', custodianUserId: actor.id }, 'SALE_RETURN', 'SALE_ITEM', item.id, input.reason);
       if (input.damaged) await tx.damage.create({ data: { merchantId: actor.merchantId, goodId: g.id, description: asString(input.reason, '货损说明'), actorId: actor.id } });
     }
+    if (full && physical && item.intakeItemId) {
+      const intakeItem = await tx.intakeItem.findFirst({ where: { id: item.intakeItemId, merchantId: actor.merchantId, status: 'SOLD' } });
+      if (intakeItem) { await tx.intakeItem.update({ where: { id: intakeItem.id }, data: { status: 'ACTIVE', soldAt: null } }); await refreshIntake(tx, intakeItem.intakeId); }
+    }
     if (item.payable) {
       // A final return clears the remaining payable exactly, including cents left by earlier partial adjustments.
       const reduction = full
@@ -420,7 +541,14 @@ export async function returnUpstream(actor: Actor, goodId: string, reason: strin
   return transact(async tx => {
     const g = await lockGood(tx, actor, goodId);
     if (g.ownershipKind !== 'CONSIGN' || g.occupancy !== 'FREE' || g.holderKind !== 'MERCHANT') throw new AppError(409, '只有在手未成交的寄售货可以退上游');
-    const result = await move(tx, actor, g, { holderKind: 'PARTNER', holderPartnerId: g.ownerPartnerId, locationId: null, returnedUpstreamAt: new Date() }, 'RETURN_UPSTREAM', 'GOOD', goodId, asString(reason, '原因'));
+    const why = asString(reason, '原因');
+    if (await tx.damage.findFirst({ where: { merchantId: actor.merchantId, goodId, resolvedAt: null } })) throw new AppError(409, '这件货尚有未处理货损');
+    const intakeItem = await tx.intakeItem.findFirst({ where: { merchantId: actor.merchantId, goodId, status: 'ACTIVE' }, include: { intake: true } });
+    if (intakeItem) requirePermission(actor, 'loans');
+    const now = new Date();
+    if (intakeItem) await tx.intakeItem.update({ where: { id: intakeItem.id }, data: { status: 'RETURNED', returnedAt: now } });
+    const result = await move(tx, actor, g, { holderKind: 'PARTNER', holderPartnerId: g.ownerPartnerId, locationId: null, custodianUserId: null, returnedUpstreamAt: now }, 'RETURN_UPSTREAM', intakeItem ? 'INTAKE_ITEM' : 'GOOD', intakeItem?.id || goodId, why);
+    if (intakeItem) await refreshIntake(tx, intakeItem.intakeId);
     await audit(tx, actor, 'RETURN_UPSTREAM', 'GOOD', goodId, state(g), state(result), reason);
     return result;
   });
@@ -551,7 +679,7 @@ export async function resolveStocktakeFinding(actor: Actor, findingId: string, d
       const known = await tx.good.findFirst({ where: { merchantId: actor.merchantId, code: finding.code } });
       if (!known) throw new AppError(409, '请先录入这件货，再选择移入盘点位置');
       good = await lockGood(tx, actor, known.id);
-      if (good.holderKind !== 'MERCHANT' || good.occupancy !== 'FREE' || good.returnedUpstreamAt) throw new AppError(409, '这件货当前不能移入盘点位置');
+      if (good.holderKind !== 'MERCHANT' || !['FREE','INBOUND'].includes(good.occupancy) || good.returnedUpstreamAt) throw new AppError(409, '这件货当前不能移入盘点位置');
       if (good.locationId !== finding.stocktake.locationId) {
         good = await move(tx, actor, good, { locationId: finding.stocktake.locationId, custodianUserId: actor.id }, 'STOCKTAKE_EXTRA_MOVE', 'STOCKTAKE', finding.stocktakeId, reviewReason);
       }

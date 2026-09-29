@@ -14,6 +14,9 @@ export async function GET(req:NextRequest){const actor=await currentUser();if(!a
   if(kind==='loans'){
     if(!allowed(actor,'loans'))return new NextResponse(null,{status:403});const data=await db.loanItem.findMany({where:{merchantId,loan:assignedCustomers===null?undefined:{partnerId:{in:assignedCustomers}}},include:{good:true,loan:{include:{partner:true}}}});return csv([['拿货单','客户','货号','货品','状态','拿货时间','应还时间'],...data.map(i=>[i.loan.number,i.loan.partner.name,i.good.code,i.good.name,i.status,i.handedAt.toISOString(),i.loan.dueAt?.toISOString()])],'loans');
   }
+  if(kind==='intakes'){
+    if(!allowed(actor,'loans'))return new NextResponse(null,{status:403});const data=await db.intakeItem.findMany({where:{merchantId},include:{good:true,intake:{include:{partner:true}}},orderBy:{createdAt:'desc'}});return csv([['收货单','上游货主','货号','货品','状态','收货时间','应还时间','核对时间','退还时间'],...data.map(i=>[i.intake.number,i.intake.partner.name,i.good.code,i.good.name,i.status,i.createdAt.toISOString(),i.intake.dueAt.toISOString(),i.checkedAt?.toISOString(),i.returnedAt?.toISOString()])],'intakes');
+  }
   if(kind==='customer'||kind==='owner'){
     if(!allowed(actor,'financeRead'))return new NextResponse(null,{status:403});const partnerId=req.nextUrl.searchParams.get('partnerId');const partner=partnerId?await db.partner.findFirst({where:{id:partnerId,merchantId}}):null;if(!partner||!canAccessPartner(actor,partner))return new NextResponse(null,{status:404});const pid=partner.id;
     if(kind==='customer'){const data=await db.saleItem.findMany({where:{merchantId,sale:{customerId:pid}},include:{good:true,sale:true}});return csv([['销售单','货号','货品','应收','已收','未收'],...data.map(i=>[i.sale.number,i.good.code,i.good.name,yuan(i.netCents-i.returnedCents),yuan(i.paidCents),yuan(i.netCents-i.returnedCents-i.paidCents)])],'customer-statement')}

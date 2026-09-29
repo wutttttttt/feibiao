@@ -1,0 +1,19 @@
+[Unit]
+Description=Feibiao inventory and ledger
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=feibiao
+Group=feibiao
+WorkingDirectory=/srv/feibiao
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env npm run start
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -12,3 +12,5 @@ postgres/
 .runtime/
 backups/
 miniprogram/project.private.config.json
+.workbuddy/
+**/._*

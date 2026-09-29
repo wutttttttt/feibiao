@@ -9,7 +9,7 @@
     "list": [
       { "pagePath": "pages/home/index", "text": "首页" },
       { "pagePath": "pages/goods/index", "text": "货品" },
-      { "pagePath": "pages/loans/index", "text": "拿货单" },
+      { "pagePath": "pages/loans/index", "text": "借还单" },
       { "pagePath": "pages/accounts/index", "text": "往来账" },
       { "pagePath": "pages/mine/index", "text": "我的" }
     ]

@@ -17,6 +17,7 @@ model Merchant {
   locations Location[]
   goods Good[]
   loans Loan[]
+  intakes Intake[]
   sales Sale[]
   receipts Receipt[]
   payables Payable[]
@@ -57,6 +58,7 @@ model Partner {
   goodsAsSource Good[] @relation("sourcePartner")
   goodsAsOwner Good[] @relation("ownerPartner")
   loans Loan[]
+  intakes Intake[]
   sales Sale[]
   receipts Receipt[]
   payables Payable[]
@@ -73,6 +75,7 @@ model Location {
   name String
   active Boolean @default(true)
   goods Good[]
+  intakes Intake[]
   @@unique([merchantId, name])
 }
 
@@ -108,7 +111,7 @@ model Good {
   location Location? @relation(fields: [locationId], references: [id])
   custodianUserId String?
   quality String @default("NORMAL") // NORMAL, HOLD, DAMAGED
-  occupancy String @default("FREE") // FREE, LOAN, RESERVED, SOLD
+  occupancy String @default("FREE") // FREE, INBOUND, LOAN, RESERVED, SOLD
   deliveredAt DateTime?
   returnedUpstreamAt DateTime?
   version Int @default(0)
@@ -117,6 +120,7 @@ model Good {
   images GoodImage[]
   movements InventoryEvent[]
   loans LoanItem[]
+  intakeItems IntakeItem[]
   saleItems SaleItem[]
   damage Damage[]
   @@unique([merchantId, code])
@@ -187,6 +191,48 @@ model LoanItem {
   @@index([merchantId, goodId, status])
 }
 
+model Intake {
+  id String @id @default(uuid())
+  merchantId String
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  number String
+  partnerId String
+  partner Partner @relation(fields: [partnerId], references: [id])
+  locationId String
+  location Location @relation(fields: [locationId], references: [id])
+  receiverName String
+  dueAt DateTime
+  status String @default("RECEIVING") // RECEIVING, ACTIVE, CLOSED
+  note String?
+  actorId String
+  createdAt DateTime @default(now())
+  items IntakeItem[]
+  @@unique([merchantId, number])
+  @@index([merchantId, partnerId, status])
+  @@index([merchantId, dueAt, status])
+}
+
+model IntakeItem {
+  id String @id @default(uuid())
+  merchantId String
+  intakeId String
+  intake Intake @relation(fields: [intakeId], references: [id])
+  goodId String
+  good Good @relation(fields: [goodId], references: [id])
+  lineNo Int
+  status String @default("PENDING") // PENDING, ACTIVE, RETURNED, SOLD, REJECTED
+  declaredCents BigInt?
+  conditionNote String?
+  checkedAt DateTime?
+  returnedAt DateTime?
+  soldAt DateTime?
+  createdAt DateTime @default(now())
+  saleItems SaleItem[]
+  @@unique([intakeId, lineNo])
+  @@index([merchantId, intakeId, status])
+  @@index([merchantId, goodId, status])
+}
+
 model Sale {
   id String @id @default(uuid())
   merchantId String
@@ -222,6 +268,8 @@ model SaleItem {
   goodId String
   good Good @relation(fields: [goodId], references: [id])
   loanItemId String?
+  intakeItemId String?
+  intakeItem IntakeItem? @relation(fields: [intakeItemId], references: [id])
   grossCents BigInt
   discountCents BigInt @default(0)
   netCents BigInt
@@ -234,6 +282,7 @@ model SaleItem {
   payable Payable?
   allocations ReceiptAllocation[]
   @@index([merchantId, goodId, status])
+  @@index([intakeItemId])
 }
 
 model Receipt {

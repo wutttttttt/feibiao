@@ -8,7 +8,8 @@ Page({
       const d = await api.request('dashboard');
       this.setData({ dashboard: d, error: '', metrics: [
         { label: '在手可售', value: `${d.inHand} 件` },
-        { label: '外借未还', value: `${d.onLoan} 件` },
+        { label: '客户外借未还', value: `${d.onLoan} 件` },
+        { label: '上游借入未结', value: `${d.intakeOpen || 0} 件` },
         { label: '客户未付', value: api.money(d.customerUnpaid) },
         { label: '上游未付', value: api.money(d.supplierUnpaid) },
         { label: '今日成交', value: api.money(d.todaySales) },

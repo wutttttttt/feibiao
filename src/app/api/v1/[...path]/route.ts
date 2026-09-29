@@ -49,17 +49,20 @@ async function run(req: NextRequest, ctx: Ctx) {
   if (req.method === 'GET') {
     if (action === 'me') return response({ id: actor.id, name: actor.name, role: actor.role, permissions: actor.permissions });
     if (action === 'dashboard') {
-      const [goods, loans, sales, receipts, payables, damages, entries, overdue] = await Promise.all([
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+      const todayStart = new Date(`${today}T00:00:00+08:00`);
+      const [goods, loans, intakes, sales, receipts, payables, damages, entries, overdue, intakeOverdue] = await Promise.all([
         db.good.findMany({ where: { merchantId: tenant }, select: { holderKind: true, occupancy: true, quality: true, returnedUpstreamAt: true, createdAt: true } }),
         db.loanItem.count({ where: { merchantId: tenant, status: 'OUT', loan:assignedCustomers===null?undefined:{partnerId:{in:assignedCustomers}} } }),
+        db.intakeItem.count({ where: { merchantId: tenant, status: { in: ['PENDING','ACTIVE'] } } }),
         db.saleItem.findMany({ where: { merchantId: tenant, status: 'ACTIVE', sale: assignedCustomers===null?undefined:{customerId:{in:assignedCustomers}} }, select: { netCents: true, returnedCents: true, paidCents: true, createdAt: true, good:{select:{ownershipKind:true,costCents:true}},payable:{select:{amountCents:true,adjustedCents:true}} } }),
         db.receipt.findMany({ where: { merchantId: tenant, partnerId: assignedCustomers===null?undefined:{in:assignedCustomers} }, select: { amountCents: true, receivedAt: true } }),
         db.payable.findMany({ where: { merchantId: tenant, saleItem:assignedCustomers===null?undefined:{sale:{customerId:{in:assignedCustomers}}} }, select: { amountCents: true, adjustedCents: true, paidCents: true } }),
         db.damage.count({ where: { merchantId: tenant, resolvedAt: null } }),
         db.moneyEntry.findMany({where:{merchantId:tenant,partnerId:assignedCustomers===null?undefined:{in:assignedCustomers}},select:{kind:true,amountCents:true,appliedCents:true,createdAt:true}}),
-        db.loanItem.count({where:{merchantId:tenant,status:'OUT',loan:{dueAt:{lt:new Date()},partnerId:assignedCustomers===null?undefined:{in:assignedCustomers}}}})
+        db.loanItem.count({where:{merchantId:tenant,status:'OUT',loan:{dueAt:{lt:todayStart},partnerId:assignedCustomers===null?undefined:{in:assignedCustomers}}}}),
+        db.intakeItem.count({where:{merchantId:tenant,status:{in:['PENDING','ACTIVE']},intake:{dueAt:{lt:todayStart}}}})
       ]);
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
       const month = today.slice(0,7);
       const day = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
       const sum = (v: bigint[]) => v.reduce((a,c) => a+c,0n);
@@ -69,7 +72,7 @@ async function run(req: NextRequest, ctx: Ctx) {
       const feeRows=await db.saleFee.findMany({where:{merchantId:tenant,createdAt:{gte:new Date(`${month}-01T00:00:00+08:00`)}}});
       const profitIncomplete=monthItems.some(s=>s.good.ownershipKind==='OWN'&&s.good.costCents==null||s.good.ownershipKind==='CONSIGN'&&!s.payable);
       const profit=sum(monthItems.map(s=>s.netCents-s.returnedCents-(s.good.ownershipKind==='OWN'?(s.good.costCents||0n):(s.payable?.amountCents||0n)+(s.payable?.adjustedCents||0n))))-sum(feeRows.map(f=>f.amountCents));
-      const result = { inHand: goods.filter(g => g.holderKind === 'MERCHANT' && g.occupancy === 'FREE' && g.quality === 'NORMAL' && !g.returnedUpstreamAt).length, onLoan: loans, overdue, todaySales: sum(sales.filter(s => day(s.createdAt) === today).map(s => s.netCents-s.returnedCents)), monthSales: sum(monthItems.map(s => s.netCents-s.returnedCents)), received: sum(receipts.filter(r => day(r.receivedAt).startsWith(month)).map(r => r.amountCents))-refunds, customerUnpaid: allowed(actor,'financeRead') ? sum(sales.map(s => nonnegative(s.netCents-s.returnedCents-s.paidCents)))+sum(entries.filter(e=>e.kind==='OPENING_AR').map(e=>e.amountCents-e.appliedCents)) : null, supplierUnpaid: allowed(actor,'financeRead') ? sum(payables.map(p => nonnegative(p.amountCents+p.adjustedCents-p.paidCents)))+sum(entries.filter(e=>e.kind==='OPENING_AP').map(e=>e.amountCents-e.appliedCents)) : null, profit:allowed(actor,'cost')&&allowed(actor,'financeRead')&&!profitIncomplete?profit:null, profitIncomplete:allowed(actor,'cost')&&allowed(actor,'financeRead')?profitIncomplete:null, damages, stale: goods.filter(g => g.occupancy === 'FREE' && g.createdAt < new Date(Date.now()-90*86400000)).length };
+      const result = { inHand: goods.filter(g => g.holderKind === 'MERCHANT' && g.occupancy === 'FREE' && g.quality === 'NORMAL' && !g.returnedUpstreamAt).length, onLoan: loans, intakeOpen: intakes, overdue, intakeOverdue, todaySales: sum(sales.filter(s => day(s.createdAt) === today).map(s => s.netCents-s.returnedCents)), monthSales: sum(monthItems.map(s => s.netCents-s.returnedCents)), received: sum(receipts.filter(r => day(r.receivedAt).startsWith(month)).map(r => r.amountCents))-refunds, customerUnpaid: allowed(actor,'financeRead') ? sum(sales.map(s => nonnegative(s.netCents-s.returnedCents-s.paidCents)))+sum(entries.filter(e=>e.kind==='OPENING_AR').map(e=>e.amountCents-e.appliedCents)) : null, supplierUnpaid: allowed(actor,'financeRead') ? sum(payables.map(p => nonnegative(p.amountCents+p.adjustedCents-p.paidCents)))+sum(entries.filter(e=>e.kind==='OPENING_AP').map(e=>e.amountCents-e.appliedCents)) : null, profit:allowed(actor,'cost')&&allowed(actor,'financeRead')&&!profitIncomplete?profit:null, profitIncomplete:allowed(actor,'cost')&&allowed(actor,'financeRead')?profitIncomplete:null, damages, stale: goods.filter(g => g.occupancy === 'FREE' && g.createdAt < new Date(Date.now()-90*86400000)).length };
       return response(result);
     }
     if (action === 'partners') { requirePermission(actor, 'partnersRead'); const rows=await db.partner.findMany({ where: { merchantId: tenant, archivedAt: null, name: q.get('q') ? { contains: q.get('q')! } : undefined, OR:assignedCustomers===null?undefined:[{NOT:{roles:{has:'CUSTOMER'}}},{id:{in:assignedCustomers}}] }, orderBy: { createdAt: 'desc' }, take: 200 }); return response(rows.map(p=>allowed(actor,'cost')?p:(({settlementFixedCents,settlementRateBp,settlementType,...safe})=>safe)(p))); }
@@ -92,6 +95,12 @@ async function run(req: NextRequest, ctx: Ctx) {
       if (!g) throw new AppError(404, '货品不存在'); return response(visibleGood(actor, g));
     }
     if (action === 'loans') { requirePermission(actor, 'loans'); return response(await db.loan.findMany({ where: { merchantId: tenant,partnerId:assignedCustomers===null?undefined:{in:assignedCustomers} }, include: { partner: {select:{id:true,name:true}}, items: { select:{id:true,status:true,referencePriceCents:true,agreedSettlementCents:true,good:{select:{id:true,code:true,name:true,quality:true}}} } }, orderBy: { createdAt: 'desc' }, take: 100 })); }
+    if (action === 'intakes') {
+      requirePermission(actor, 'loans');
+      const rows = await db.intake.findMany({ where: { merchantId: tenant }, include: { partner: { select: { id: true, name: true } }, location: { select: { id: true, name: true } }, items: { orderBy: { lineNo: 'asc' }, include: { good: { include: { images: true, damage: { where: { resolvedAt: null }, select: { id: true } } } } } } }, orderBy: { createdAt: 'desc' }, take: 100 });
+      const canCost = allowed(actor, 'cost');
+      return response(rows.map(row => ({ ...row, overdue: ['RECEIVING','ACTIVE'].includes(row.status) && row.dueAt < new Date(`${new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Shanghai'})}T00:00:00+08:00`), items: row.items.map(({declaredCents,...item}) => { const {damage,...good}=item.good; const returnBlockedReason=item.status!=='ACTIVE'?null:damage.length?'有未处理货损':good.occupancy==='LOAN'||good.holderKind!=='MERCHANT'?'客户持有':good.occupancy!=='FREE'?'当前状态不可退':good.returnedUpstreamAt?'已退上游':null; return { ...item, ...(canCost ? { declaredCents } : {}), returnBlockedReason, good: visibleGood(actor, good) }; }) })));
+    }
     if (action === 'sales') { requirePermission(actor, 'sales'); return response(await db.sale.findMany({ where: { merchantId: tenant,customerId:assignedCustomers===null?undefined:{in:assignedCustomers} }, include: { customer: { select: { id: true, name: true } }, items: { include: { good: { select: { code: true, name: true } } } }, fees:allowed(actor,'cost') }, orderBy: { createdAt: 'desc' }, take: 100 })); }
     if (action === 'receipts') { requirePermission(actor, 'receipts'); return response(await db.receipt.findMany({ where: { merchantId: tenant,partnerId:assignedCustomers===null?undefined:{in:assignedCustomers} }, include: { partner: { select: { name: true } }, allocations: true }, orderBy: { receivedAt: 'desc' }, take: 100 })); }
     if(action==='money-entries'){requirePermission(actor,'financeRead');return response(await db.moneyEntry.findMany({where:{merchantId:tenant,partnerId:assignedCustomers===null?undefined:{in:assignedCustomers}},include:{partner:{select:{id:true,name:true}}},orderBy:{createdAt:'desc'},take:300}));}
@@ -125,6 +134,9 @@ async function run(req: NextRequest, ctx: Ctx) {
   else if (path[0] === 'goods' && path[2] === 'unreserve') result = await b.reserveGood(actor, path[1], false);
   else if (path[0] === 'goods' && path[2] === 'return-upstream') result = await b.returnUpstream(actor, path[1], body.reason);
   else if (action === 'loans') result = await b.createLoan(actor, body);
+  else if (action === 'intakes') result = await b.createIntake(actor, body);
+  else if (path[0] === 'intake-items' && path[2] === 'check-in') result = await b.checkInIntakeItem(actor, path[1], body);
+  else if (path[0] === 'intakes' && path[2] === 'return') result = await b.returnIntakeItems(actor, path[1], body);
   else if (path[0] === 'loan-items' && path[2] === 'return') result = await b.returnLoanItem(actor, path[1], body);
   else if (path[0] === 'loan-items' && path[2] === 'transfer') result = await b.transferLoanItem(actor, path[1], body);
   else if (action === 'sales') result = await b.createSale(actor, body);

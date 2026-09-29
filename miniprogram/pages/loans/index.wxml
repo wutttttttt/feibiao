@@ -1,7 +1,8 @@
 <view class="page">
-  <view class="title">拿货单</view>
-  <view wx:if="{{mode === 'list'}}">
-    <button class="button" bindtap="create">＋ 客户拿货</button>
+  <view class="title">借还单</view>
+  <view class="two"><button class="button {{view === 'outbound' ? '' : 'secondary'}}" bindtap="showOutbound">客户借出</button><button class="button {{view === 'inbound' ? '' : 'secondary'}}" bindtap="showInbound">向货主借入</button></view>
+  <view wx:if="{{view === 'outbound' && mode === 'list'}}">
+    <button class="button" bindtap="create">＋ 客户借出</button>
     <view wx:for="{{loans}}" wx:key="id" class="card">
       <view class="strong">{{item.number}} · {{item.partner.name}}</view>
       <view class="muted">接收人 {{item.receiverName}}</view>
@@ -12,7 +13,7 @@
     </view>
     <view wx:if="{{loans.length === 0}}" class="empty">暂无拿货单</view>
   </view>
-  <view wx:elif="{{mode === 'create'}}" class="card">
+  <view wx:elif="{{view === 'outbound' && mode === 'create'}}" class="card">
     <view class="section">交接货品</view>
     <view class="field">客户<picker class="picker" range="{{partners}}" range-key="name" bindchange="customer">{{customerIndex >= 0 ? partners[customerIndex].name : '请选择客户'}}</picker></view>
     <view class="field">实际接收人<input class="input" value="{{receiverName}}" data-field="receiverName" bindinput="edit" /></view>
@@ -24,7 +25,7 @@
     <view wx:for="{{selected}}" wx:key="id" class="row field"><view>{{item.code}}</view><input class="input" style="width:210rpx" type="digit" value="{{item.price}}" data-id="{{item.id}}" bindinput="price" placeholder="参考价 元" /></view>
     <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="save">确认交接</button><button class="button secondary" bindtap="back">返回</button>
   </view>
-  <view wx:elif="{{mode === 'item'}}" class="card">
+  <view wx:elif="{{view === 'outbound' && mode === 'item'}}" class="card">
     <view class="section">{{item.good.code}} · {{item.good.name}}</view>
     <view class="sub">状态 {{item.statusText}}</view>
     <view wx:if="{{item.status === 'OUT'}}">
@@ -37,7 +38,7 @@
     </view>
     <button class="button secondary" bindtap="back">返回拿货单</button>
   </view>
-  <view wx:else class="card">
+  <view wx:elif="{{view === 'outbound' && mode === 'transfer'}}" class="card">
     <view class="section">{{item.good.code}} · 转交记录</view>
     <view class="field">核实情况<picker class="picker" range="{{transferChoices}}" bindchange="transferKind">{{transferChoices[transferConfirmed]}}</picker></view>
     <view wx:if="{{transferConfirmed === 1}}" class="field">实际接收人<picker class="picker" range="{{partners}}" range-key="name" bindchange="transferReceiver">{{transferIndex >= 0 ? partners[transferIndex].name : '请选择'}}</picker></view>
@@ -45,5 +46,51 @@
     <view class="notice">仅登记线索时，原拿货人继续负责。确认承接后，责任才转给实际接收人。</view>
     <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="saveTransfer">保存转交</button>
     <button class="button secondary" bindtap="back">返回拿货单</button>
+  </view>
+  <view wx:elif="{{view === 'inbound' && mode === 'list'}}">
+    <button class="button" bindtap="createIntake">＋ 新建借入单</button>
+    <view wx:for="{{intakes}}" wx:key="id" class="card">
+      <view class="strong">{{item.number}} · {{item.partner.name}}</view>
+      <view class="muted">{{item.overdue ? '已逾期 · ' : ''}}{{item.statusText}} · 应还 {{item.dueAt}}</view>
+      <view class="muted">交货人 {{item.receiverName}} · 暂存 {{item.location.name}}</view>
+      <view class="divider"></view>
+      <view wx:for="{{item.items}}" wx:for-item="piece" wx:key="id" class="row" style="margin:12rpx 0">
+        <view>{{piece.good.code}} · {{piece.good.name}}</view><button wx:if="{{piece.status === 'PENDING' || piece.status === 'ACTIVE'}}" class="button small secondary" disabled="{{!!piece.returnBlockedReason}}" data-intake="{{item.id}}" data-id="{{piece.id}}" bindtap="openIntakeItem">{{piece.returnBlockedReason ? '不可退：' + piece.returnBlockedReason : piece.statusText}}</button><view wx:else class="muted">{{piece.statusText}}</view>
+      </view>
+    </view>
+    <view wx:if="{{intakes.length === 0}}" class="empty">暂无上游借入单</view>
+  </view>
+  <view wx:elif="{{view === 'inbound' && mode === 'intake-create'}}" class="card">
+    <view class="section">实际到货登记</view>
+    <view class="field">上游货主<picker class="picker" range="{{owners}}" range-key="name" bindchange="owner">{{ownerIndex >= 0 ? owners[ownerIndex].name : '请选择货主'}}</picker></view>
+    <view class="field">实际交货人<input class="input" value="{{receiverName}}" data-field="receiverName" bindinput="edit" /></view>
+    <view class="field">应还日期<picker class="picker" mode="date" bindchange="edit" data-field="dueAt">{{dueAt || '请选择'}}</picker></view>
+    <view class="field">暂存位置<picker class="picker" range="{{locations}}" range-key="name" bindchange="location">{{locationIndex >= 0 ? locations[locationIndex].name : '请选择位置'}}</picker></view>
+    <view class="field">备注<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+    <view wx:for="{{intakeLines}}" wx:key="index" class="card">
+      <view class="row"><view class="strong">第 {{index + 1}} 件</view><button wx:if="{{intakeLines.length > 1}}" class="button small secondary" data-index="{{index}}" bindtap="removeLine">移除</button></view>
+      <view wx:if="{{reusableGoods.length}}" class="field">复用已退回货品<picker class="picker" range="{{reusableGoods}}" range-key="code" data-index="{{index}}" bindchange="reuseGood">{{item.existingGoodId ? '已选择原货品档案' : '不复用（新货品）'}}</picker></view>
+      <button wx:if="{{item.existingGoodId}}" class="button small secondary" data-index="{{index}}" bindtap="clearReuse">改为新货品</button>
+      <block wx:if="{{!item.existingGoodId}}"><view class="two"><view class="field grow">货号<input class="input" value="{{item.code}}" data-index="{{index}}" data-field="code" bindinput="lineEdit" placeholder="留空自动生成" /></view><button class="button secondary" data-index="{{index}}" bindtap="scanIntake">扫码</button></view>
+      <view class="field">名称<input class="input" value="{{item.name}}" data-index="{{index}}" data-field="name" bindinput="lineEdit" /></view>
+      <view class="field">品类<input class="input" value="{{item.category}}" data-index="{{index}}" data-field="category" bindinput="lineEdit" /></view>
+      <view class="field">对外报价<input class="input" type="digit" value="{{item.asking}}" data-index="{{index}}" data-field="asking" bindinput="lineEdit" /></view></block>
+      <view class="field">收货外观<input class="input" value="{{item.conditionNote}}" data-index="{{index}}" data-field="conditionNote" bindinput="lineEdit" /></view>
+      <block wx:if="{{canCost}}"><view class="field">货主报价<input class="input" type="digit" value="{{item.declared}}" data-index="{{index}}" data-field="declared" bindinput="lineEdit" /></view><view class="field">结算方式<picker class="picker" range="{{settlementChoices}}" data-index="{{index}}" bindchange="settlement">{{item.settlementType || '继承货主默认'}}</picker></view><view class="field">固定结算价<input class="input" type="digit" value="{{item.settlementFixed}}" data-index="{{index}}" data-field="settlementFixed" bindinput="lineEdit" /></view><view class="field">分成万分比<input class="input" type="number" value="{{item.settlementRateBp}}" data-index="{{index}}" data-field="settlementRateBp" bindinput="lineEdit" /></view></block>
+    </view>
+    <button class="button secondary" bindtap="addLine">＋ 再加一件</button><button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="saveIntake">确认收货</button><button class="button secondary" bindtap="back">返回借入单</button>
+  </view>
+  <view wx:elif="{{view === 'inbound' && mode === 'intake-check'}}" class="card">
+    <view class="section">{{item.good.code}} · 逐件入库核对</view>
+    <view class="field">核对结果<picker class="picker" range="{{checkChoices}}" bindchange="checkKind">{{checkResult === 'NORMAL' ? '正常入库' : checkResult === 'DAMAGED' ? '异常入库' : '拒收退回'}}</picker></view>
+    <view class="field">核对说明<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+    <block wx:if="{{canCost}}"><view class="field">补充结算方式<picker class="picker" range="{{settlementChoices}}" bindchange="checkSettlement">{{checkSettlementType || '沿用收货资料'}}</picker></view><view class="field">固定结算价<input class="input" type="digit" value="{{checkSettlementFixed}}" data-field="checkSettlementFixed" bindinput="edit" /></view><view class="field">分成万分比<input class="input" type="number" value="{{checkSettlementRateBp}}" data-field="checkSettlementRateBp" bindinput="edit" /></view></block>
+    <button class="button" disabled="{{busy}}" loading="{{busy}}" bindtap="saveCheck">保存核对</button><button class="button secondary" bindtap="back">返回借入单</button>
+  </view>
+  <view wx:elif="{{view === 'inbound' && mode === 'intake-return'}}" class="card">
+    <view class="section">{{intake.number}} · 退还上游</view>
+    <block wx:for="{{intake.items}}" wx:key="id"><view wx:if="{{item.status === 'ACTIVE' && !item.returnBlockedReason}}" class="pill" data-id="{{item.id}}" bindtap="toggleIntakeReturn">{{item.good.code}} {{item.good.name}}（点选）</view><view wx:elif="{{item.status === 'ACTIVE'}}" class="pill muted">{{item.good.code}} {{item.good.name}}（不可退：{{item.returnBlockedReason}}）</view></block>
+    <view class="field">退还原因<input class="input" value="{{note}}" data-field="note" bindinput="edit" /></view>
+    <button class="button" disabled="{{busy || selected.length === 0}}" loading="{{busy}}" bindtap="saveIntakeReturn">退还所选 {{selected.length}} 件</button><button class="button secondary" bindtap="back">返回借入单</button>
   </view>
 </view>

@@ -200,7 +200,7 @@ describe('微信小程序接入', () => {
     (globalThis as any).wx = { showToast: () => {} };
     api.request = async (path: string, method = 'GET', body?: any) => {
       calls.push({ path, method, body });
-      if (path === 'loans') return [];
+      if (path === 'loans' || path === 'intakes') return [];
       if (path === 'goods') return [];
       if (path === 'partners') return [{ id: 'p2', name: '接收人', roles: ['CUSTOMER'] }];
       if (path === 'locations') return [];
@@ -211,6 +211,35 @@ describe('微信小程序接入', () => {
     Object.assign(page.data, { item: { id: 'li1' }, transferConfirmed: 1, transferIndex: 0, partners: [{ id: 'p2' }], note: '现场已核实' });
     await page.saveTransfer();
     expect(calls[0]).toEqual({ path: 'loan-items/li1/transfer', method: 'POST', body: { confirmed: true, partnerId: 'p2', note: '现场已核实' } });
+  });
+
+  it('小程序借入按实到货逐件建档、核对并批量退还', async () => {
+    const calls: any[] = [];
+    (globalThis as any).wx = { showToast: () => {} };
+    api.request = async (path: string, method = 'GET', body?: any) => { calls.push({ path, method, body }); return { ok: true }; };
+    const page = pageOf('loans');
+    page.load = async () => {};
+    Object.assign(page.data, { owners: [{ id: 'owner1' }], ownerIndex: 0, locations: [{ id: 'loc1' }], locationIndex: 0, receiverName: '送货人', dueAt: '2026-12-31', intakeLines: [{ code: 'J-1', name: '借入手镯', category: '手镯', settlementType: 'RATE', settlementRateBp: '8000' }] });
+    await page.saveIntake();
+    expect(calls[0]).toEqual({ path: 'intakes', method: 'POST', body: expect.objectContaining({ partnerId: 'owner1', locationId: 'loc1', items: [expect.objectContaining({ code: 'J-1' })] }) });
+    Object.assign(page.data, { item: { id: 'ii1' }, checkResult: 'DAMAGED', note: '到货裂纹', checkSettlementType: '', checkSettlementFixed: '', checkSettlementRateBp: '' });
+    await page.saveCheck();
+    expect(calls[1]).toEqual({ path: 'intake-items/ii1/check-in', method: 'POST', body: expect.objectContaining({ result: 'DAMAGED', note: '到货裂纹' }) });
+    Object.assign(page.data, { intake: { id: 'in1' }, selected: ['ii1','ii2'], note: '到期退还' });
+    await page.saveIntakeReturn();
+    expect(calls[2]).toEqual({ path: 'intakes/in1/return', method: 'POST', body: { itemIds: ['ii1','ii2'], reason: '到期退还' } });
+  });
+
+  it('小程序再次收货复用已退上游的原货品档案', async () => {
+    const calls: any[] = [];
+    (globalThis as any).wx = { showToast: () => {} };
+    api.request = async (path: string, method = 'GET', body?: any) => { calls.push({ path, method, body }); return { ok: true }; };
+    const page = pageOf('loans');
+    page.load = async () => {};
+    Object.assign(page.data, { owners: [{ id: 'owner1' }], ownerIndex: 0, locations: [{ id: 'loc1' }], locationIndex: 0, receiverName: '再次送货', dueAt: '2026-12-31', reusableGoods: [{ id: 'g-old', code: 'J-OLD' }], intakeLines: [page.emptyIntakeLine()] });
+    page.reuseGood({ currentTarget: { dataset: { index: 0 } }, detail: { value: '0' } });
+    await page.saveIntake();
+    expect(calls[0]).toEqual({ path: 'intakes', method: 'POST', body: expect.objectContaining({ items: [expect.objectContaining({ existingGoodId: 'g-old' })] }) });
   });
 
   it('押金退款使用独立退款动作，不再登记第二笔收款', async () => {

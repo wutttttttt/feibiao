@@ -9,10 +9,11 @@
     "db:migrate": "prisma migrate deploy",
     "db:dev": "prisma migrate dev",
     "db:seed": "node --env-file=.env --experimental-strip-types scripts/seed.ts",
-    "test": "vitest run"
+    "bootstrap:owner": "node --env-file=.env --experimental-strip-types scripts/bootstrap-owner.ts",
+    "test": "vitest run --exclude \"**/._*\""
   },
   "dependencies": {
-    "@prisma/client": "6.19.3",
+    "@prisma/client": "6.12.0",
     "@types/jsbarcode": "^3.11.4",
     "@zxing/browser": "0.2.1",
     "@zxing/library": "0.23.0",
@@ -31,9 +32,9 @@
     "@types/node": "24.10.1",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "prisma": "6.19.3",
+    "prisma": "6.12.0",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "vitest": "4.0.15"
+    "vitest": "4.1.11"
   }
 }

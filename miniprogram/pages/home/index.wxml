@@ -5,8 +5,8 @@
     <view wx:for="{{metrics}}" wx:key="label" class="card stat"><view class="muted">{{item.label}}</view><view class="money">{{item.value}}</view></view>
   </view>
   <view class="section">快速办理</view>
-  <view class="two"><button class="button" data-page="goods" bindtap="go">录货 / 查货</button><button class="button" data-page="loans" bindtap="go">客户拿货</button></view>
+  <view class="two"><button class="button" data-page="goods" bindtap="go">录货 / 查货</button><button class="button" data-page="loans" bindtap="go">借入 / 借出</button></view>
   <view class="two"><button class="button secondary" data-page="accounts" bindtap="go">确认成交</button><button class="button secondary" data-page="accounts" bindtap="go">登记收款</button></view>
   <view class="section">需要留意</view>
-  <view class="card">{{dashboard.overdue || 0}} 件外借超期；{{dashboard.damages || 0}} 件货损待处理。外借货不会算作摊位缺货。</view>
+  <view class="card">{{dashboard.overdue || 0}} 件客户外借超期；{{dashboard.intakeOverdue || 0}} 件上游借入超期；{{dashboard.damages || 0}} 件货损待处理。</view>
 </view>

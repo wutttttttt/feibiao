@@ -12,7 +12,7 @@ Page({
   },
   filter() {
     const q = this.data.query.trim().toLowerCase();
-    this.setData({ visible: this.data.goods.filter(g => !q || `${g.code} ${g.name} ${g.category}`.toLowerCase().includes(q)).slice(0, 100).map(g => ({ ...g, state: ({ FREE: '可用', LOAN: '外借', RESERVED: '预留', SOLD: '已成交' })[g.occupancy] || g.occupancy, askingText: api.money(g.askingCents) })) });
+    this.setData({ visible: this.data.goods.filter(g => !q || `${g.code} ${g.name} ${g.category}`.toLowerCase().includes(q)).slice(0, 100).map(g => ({ ...g, state: ({ FREE: '可用', INBOUND: '待入库', LOAN: '外借', RESERVED: '预留', SOLD: '已成交' })[g.occupancy] || g.occupancy, askingText: api.money(g.askingCents) })) });
   },
   search(e) { this.setData({ query: e.detail.value }); this.filter(); },
   async scan() { try { const code = await api.scan(); this.setData({ query: code }); this.filter(); } catch {} },
