@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { AppError, allowed, canAccessPartner, customerIds, clearSession, createSession, currentUser, issueMiniToken, requirePermission, type Actor } from '@/lib/auth';
 import { hash, serialize, token, asString, money, json } from '@/lib/common';
+import { recordFailure, checkLocked, recordSuccess } from '@/lib/login-guard';
 import * as b from '@/lib/business';
 import { requestKey } from '@/lib/request-key';
 import { existsSync } from 'node:fs';
@@ -34,8 +35,18 @@ async function run(req: NextRequest, ctx: Ctx) {
   const action = path.join('/');
   if (req.method === 'POST' && action === 'login') {
     const body = await req.json();
-    const user = await db.user.findUnique({ where: { login: asString(body.login, '账号') } });
-    if (!user?.active || !(await bcrypt.compare(String(body.password || ''), user.passwordHash))) throw new AppError(401, '账号或密码错误');
+    const loginId = asString(body.login, '账号');
+    const lockState = checkLocked(loginId);
+    if (lockState.locked) { const mins = Math.ceil((lockState.retryAfterSec || 60) / 60); throw new AppError(429, `账号已锁定，请 ${mins} 分钟后再试`); }
+    const user = await db.user.findUnique({ where: { login: loginId } });
+    const passwordOk = user?.active ? await bcrypt.compare(String(body.password || ''), user.passwordHash) : (await bcrypt.compare(String(body.password || ''), '$2b$12$abcdefghijklmnopqrstuv1234567890abcdefghijklmnopqrst'), false);
+    if (!user?.active || !passwordOk) {
+      recordFailure(loginId);
+      try { await db.auditLog.create({ data: { merchantId: user?.merchantId || 'unknown', actorId: 'system', action: 'LOGIN_FAILED', entityType: 'USER', entityId: user?.id || loginId } }); } catch {}
+      throw new AppError(401, '账号或密码错误');
+    }
+    recordSuccess(loginId);
+    try { await db.auditLog.create({ data: { merchantId: user.merchantId, actorId: user.id, action: 'LOGIN_SUCCESS', entityType: 'USER', entityId: user.id } }); } catch {}
     await createSession(user.id);
     const mini = req.headers.get('x-client') === 'wechat-mini';
     return response({ name: user.name, role: user.role, ...(mini ? { token: await issueMiniToken(user.id), expiresIn: 43200 } : {}) });
@@ -122,6 +133,19 @@ async function run(req: NextRequest, ctx: Ctx) {
     requestKey.enterWith({ merchantId: tenant, actorId: actor.id, key: idempotency, action });
   }
   let result: unknown;
+  if (action === 'me/password') {
+    const oldPassword = asString(body.oldPassword, '当前密码');
+    const newPassword = asString(body.newPassword, '新密码');
+    if (newPassword.length < 12) throw new AppError(400, '新密码至少12位');
+    const fullUser = await db.user.findUniqueOrThrow({ where: { id: actor.id }, select: { id: true, passwordHash: true, tokenVersion: true } });
+    if (!(await bcrypt.compare(oldPassword, fullUser.passwordHash))) throw new AppError(401, '当前密码错误');
+    await db.$transaction(async tx => {
+      await tx.user.update({ where: { id: actor.id }, data: { passwordHash: await bcrypt.hash(newPassword, 12), tokenVersion: { increment: 1 } } });
+      await tx.auditLog.create({ data: { merchantId: tenant, actorId: actor.id, action: 'PASSWORD_CHANGED', entityType: 'USER', entityId: actor.id } });
+    });
+    await clearSession();
+    return response({ ok: true });
+  }
   if (action === 'partners') result = await b.createPartner(actor, body);
   else if (path[0] === 'partners' && path[2] === 'update') result = await b.updatePartner(actor, path[1], body);
   else if (action === 'locations') { requirePermission(actor, 'settings'); result = await db.location.create({ data: { merchantId: tenant, name: asString(body.name, '位置名称') } }); }
@@ -165,8 +189,8 @@ async function run(req: NextRequest, ctx: Ctx) {
     const raw = token();
     const expires = new Date(Date.now() + Math.min(Math.max(Number(body.days) || 7, 1), 30)*86400000);
     const pin = body.kind === 'GOOD' ? null : asString(body.pin, '账单访问码');
-    if(pin&&pin.length<6)throw new AppError(400,'账单访问码至少6位');
-    const link = await db.shareLink.create({ data: { merchantId: tenant, kind: body.kind, targetId: asString(body.targetId, '分享对象'), tokenHash: hash(raw), pinHash: pin ? hash(pin) : null, expiresAt: expires, createdById: actor.id } });
+    if(pin&&!/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/.test(pin))throw new AppError(400,'账单访问码至少8位且须含字母和数字');
+    const link = await db.shareLink.create({ data: { merchantId: tenant, kind: body.kind, targetId: asString(body.targetId, '分享对象'), tokenHash: hash(raw), pinHash: pin ? await bcrypt.hash(pin, 12) : null, expiresAt: expires, createdById: actor.id } });
     result = { id: link.id, url: `${req.nextUrl.origin}/share/${raw}`, expiresAt: expires };
   }
   else if (path[0] === 'shares' && path[2] === 'revoke') { requirePermission(actor, 'shares'); result = await db.shareLink.updateMany({ where: { id: path[1], merchantId: tenant,OR:assignedCustomers===null?undefined:[{kind:'GOOD'},{targetId:{in:assignedCustomers}}] }, data: { revokedAt: new Date() } }); }

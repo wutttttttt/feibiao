@@ -36,6 +36,7 @@ model User {
   role String @default("STAFF")
   permissions Json @default("{}")
   active Boolean @default(true)
+  tokenVersion Int @default(0)
   createdAt DateTime @default(now())
   @@index([merchantId])
 }
@@ -456,6 +457,7 @@ model ShareLink {
   tokenHash String @unique
   pinHash String?
   attempts Int @default(0)
+  lastFailedAt DateTime?
   expiresAt DateTime
   revokedAt DateTime?
   createdById String

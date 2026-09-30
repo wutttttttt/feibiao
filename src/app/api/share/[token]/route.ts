@@ -1,10 +1,17 @@
 import { NextRequest,NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { hash, serialize } from '@/lib/common';
 export async function POST(req:NextRequest,{params}:{params:Promise<{token:string}>}){
   const {token}=await params; const link=await db.shareLink.findUnique({where:{tokenHash:hash(token)}});
   if(!link||link.revokedAt||link.expiresAt<=new Date())return NextResponse.json({error:'链接已失效'},{status:404});
-  if(link.pinHash){const body=await req.json();if(link.attempts>=10)return NextResponse.json({error:'访问次数过多，请联系摊主'},{status:429});if(hash(String(body.pin||''))!==link.pinHash){await db.shareLink.update({where:{id:link.id},data:{attempts:{increment:1}}});return NextResponse.json({error:'访问码错误'},{status:403});}}
+  if(link.pinHash){const body=await req.json();const now=new Date();if(link.attempts>=10){if(link.lastFailedAt&&now.getTime()-link.lastFailedAt.getTime()<30*60*1000)return NextResponse.json({error:'访问次数过多，请联系摊主'},{status:429});await db.shareLink.update({where:{id:link.id},data:{attempts:0,lastFailedAt:null}});}
+  const pin=String(body.pin||'');
+  let pinOk=false;
+  try{pinOk=await bcrypt.compare(pin,link.pinHash);}catch{pinOk=false;}
+  if(!pinOk&&link.pinHash&&hash(pin)===link.pinHash){pinOk=true;bcrypt.hash(pin,12).then(h=>db.shareLink.update({where:{id:link.id},data:{pinHash:h}}).catch(()=>{}));}
+  if(!pinOk){await db.shareLink.update({where:{id:link.id},data:{attempts:{increment:1},lastFailedAt:new Date()}});return NextResponse.json({error:'访问码错误'},{status:403});}
+  await db.shareLink.update({where:{id:link.id},data:{attempts:0,lastFailedAt:null}});}
   let result:unknown;
   if(link.kind==='GOOD'){
     const g=await db.good.findFirst({where:{id:link.targetId,merchantId:link.merchantId},include:{images:true}});

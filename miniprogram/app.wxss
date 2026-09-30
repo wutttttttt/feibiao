@@ -1,1 +1,188 @@
-page{background:#f4f7f5;color:#173a30;font-size:30rpx}.page{padding:24rpx 24rpx 56rpx}.title{font-size:42rpx;font-weight:700;margin:16rpx 0 24rpx}.sub{color:#71847a;font-size:25rpx;margin:8rpx 0 20rpx}.card{background:#fff;border:1rpx solid #dae7df;border-radius:22rpx;padding:26rpx;margin:16rpx 0}.row{display:flex;align-items:center;justify-content:space-between;gap:14rpx}.wrap{flex-wrap:wrap}.grow{flex:1;min-width:0}.strong{font-weight:700}.muted{color:#6a8074;font-size:26rpx}.money{font-size:36rpx;color:#0b6a4e;font-weight:700}.button{background:#086d52;color:white;border-radius:14rpx;font-size:29rpx;margin:14rpx 0;padding:4rpx 18rpx}.button::after{border:0}.button.secondary{background:#eaf4ee;color:#0a6249}.button.warn{background:#fff0e9;color:#a2452e}.button.small{font-size:25rpx;padding:0 16rpx;margin:5rpx}.field{display:block;margin:20rpx 0;color:#476157;font-size:27rpx}.input,.picker{display:block;background:white;border:1rpx solid #c8dad0;border-radius:12rpx;padding:18rpx;margin-top:8rpx;min-height:42rpx;color:#183d32}.picker{min-height:44rpx}.search{background:white;border:1rpx solid #c8dad0;border-radius:12rpx;padding:17rpx;margin:12rpx 0}.pill{display:inline-block;padding:10rpx 20rpx;margin:5rpx;background:#e8f3ec;border-radius:40rpx;color:#21634e;font-size:26rpx}.pill.selected{background:#086d52;color:white}.notice{background:#e8f5eb;border-radius:14rpx;padding:17rpx;color:#0c6548;margin:14rpx 0}.error{background:#fff0e9;color:#ad402c;border-radius:14rpx;padding:17rpx;margin:14rpx 0}.divider{height:1rpx;background:#e4eee7;margin:18rpx 0}.thumb{width:110rpx;height:110rpx;border-radius:14rpx;background:#e7f1e9;margin-right:15rpx;flex:none}.section{font-size:33rpx;font-weight:700;margin:34rpx 0 15rpx}.empty{color:#81958a;text-align:center;padding:50rpx}.two{display:flex;gap:12rpx}.two .button{flex:1}.stat{width:48%;box-sizing:border-box}.stat .money{font-size:37rpx}.code{font-family:monospace;font-size:28rpx}
+/* ============================================================
+   翠账小程序 · 翡翠设计语言（Jade Design Language）
+   翠绿 / 玉白 / 墨绿 · 与网页端 token 对齐（rpx ≈ 2×px）
+   直接写色值（不依赖 CSS 变量），保证老基础库稳定渲染
+   ============================================================ */
+
+page {
+  background: #F6F8F4;
+  color: #1A3C33;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+.page { padding: 24rpx 24rpx 56rpx; }
+
+/* 标题层：40rpx / 小节 32rpx / 正文 28rpx */
+.title {
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  margin: 16rpx 0 24rpx;
+}
+
+.sub {
+  color: #5F7A6E;
+  font-size: 26rpx;
+  margin: 8rpx 0 20rpx;
+}
+
+/* 卡片：玉白渐变底 + 细边框 + 双层柔影 */
+.card {
+  background: linear-gradient(180deg, #FFFFFF, #F8FAF7);
+  border: 1rpx solid rgba(11, 59, 51, 0.08);
+  border-radius: 24rpx;
+  padding: 26rpx;
+  margin: 16rpx 0;
+  box-shadow: 0 2rpx 4rpx rgba(11, 59, 51, 0.04), 0 16rpx 48rpx rgba(11, 59, 51, 0.06);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+}
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.strong { font-weight: 700; }
+.muted { color: #5F7A6E; font-size: 26rpx; }
+
+/* 金额：主翠绿 + 等宽数字 */
+.money {
+  font-size: 36rpx;
+  color: #0E7A5A;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 主按钮：翠绿渐变 + 柔影 + 按压反馈 */
+.button {
+  background: linear-gradient(180deg, #12836A, #0C6B52);
+  color: #FFFFFF;
+  border-radius: 16rpx;
+  font-size: 29rpx;
+  font-weight: 600;
+  margin: 14rpx 0;
+  padding: 4rpx 18rpx;
+  box-shadow: 0 2rpx 4rpx rgba(11, 59, 51, 0.08), 0 10rpx 24rpx rgba(14, 122, 90, 0.20);
+  transition: opacity .12s, transform .12s;
+}
+.button::after { border: 0; }
+.button:active { opacity: .88; transform: scale(.985); }
+.button[disabled] { opacity: .55; }
+
+/* 次按钮：玉白底 + 细边框 + 墨绿字 */
+.button.secondary {
+  background: linear-gradient(180deg, #FFFFFF, #F4F8F2);
+  color: #0A5C46;
+  border: 1rpx solid rgba(11, 59, 51, 0.14);
+  box-shadow: 0 1rpx 2rpx rgba(11, 59, 51, 0.04);
+}
+
+/* 警示按钮（语义保留暖色系） */
+.button.warn {
+  background: #FBF0E6;
+  color: #A2452E;
+  border: 1rpx solid rgba(162, 69, 46, 0.22);
+  box-shadow: none;
+}
+
+.button.small { font-size: 25rpx; padding: 0 16rpx; margin: 5rpx; }
+
+/* 表单 */
+.field {
+  display: block;
+  margin: 20rpx 0;
+  color: #5F7A6E;
+  font-size: 27rpx;
+}
+.input, .picker {
+  display: block;
+  background: #FFFFFF;
+  border: 1rpx solid rgba(11, 59, 51, 0.14);
+  border-radius: 14rpx;
+  padding: 18rpx;
+  margin-top: 8rpx;
+  min-height: 42rpx;
+  color: #1A3C33;
+}
+.picker { min-height: 44rpx; }
+.search {
+  background: #FFFFFF;
+  border: 1rpx solid rgba(11, 59, 51, 0.14);
+  border-radius: 14rpx;
+  padding: 17rpx;
+  margin: 12rpx 0;
+}
+
+/* 胶囊：玉青底 + 深翠字；选中态翠绿底白字 */
+.pill {
+  display: inline-block;
+  padding: 10rpx 20rpx;
+  margin: 5rpx;
+  background: #E9F4EC;
+  border: 1rpx solid rgba(14, 122, 90, 0.14);
+  border-radius: 999rpx;
+  color: #0A5C46;
+  font-size: 26rpx;
+  transition: opacity .12s, transform .12s;
+}
+.pill:active { opacity: .88; transform: scale(.985); }
+.pill.selected {
+  background: linear-gradient(180deg, #12836A, #0C6B52);
+  border-color: transparent;
+  color: #FFFFFF;
+}
+
+/* 提示条（语义色保留） */
+.notice {
+  background: #E9F4EC;
+  border: 1rpx solid rgba(12, 101, 72, 0.16);
+  border-radius: 14rpx;
+  padding: 17rpx;
+  color: #0C6548;
+  margin: 14rpx 0;
+}
+.error {
+  background: #FBEDEB;
+  border: 1rpx solid rgba(156, 46, 48, 0.22);
+  border-radius: 14rpx;
+  padding: 17rpx;
+  color: #9C2E30;
+  margin: 14rpx 0;
+}
+
+.divider { height: 1rpx; background: #E3ECE6; margin: 18rpx 0; }
+
+.thumb {
+  width: 110rpx;
+  height: 110rpx;
+  border-radius: 16rpx;
+  background: #E3ECE6;
+  margin-right: 15rpx;
+  flex: none;
+}
+
+/* 小节标题：32rpx + 左侧鎏金短线（唯一鎏金点缀） */
+.section {
+  font-size: 32rpx;
+  font-weight: 600;
+  margin: 34rpx 0 15rpx;
+  padding-left: 14rpx;
+  border-left: 6rpx solid #B08D57;
+}
+
+.empty { color: #5F7A6E; text-align: center; padding: 50rpx; }
+
+.two { display: flex; gap: 12rpx; }
+.two .button { flex: 1; }
+
+.stat { width: 48%; box-sizing: border-box; }
+.stat .money { font-size: 37rpx; }
+
+.code {
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 28rpx;
+  font-variant-numeric: tabular-nums;
+}

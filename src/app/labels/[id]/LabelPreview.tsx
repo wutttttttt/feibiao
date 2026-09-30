@@ -19,6 +19,6 @@ export default function LabelPreview({ good }: { good: { code: string; name: str
   return <main style={{ maxWidth: 900, margin: 'auto', padding: 20 }}>
     <div className="row between"><div><h1 style={{ marginBottom: 4 }}>打印货品标签</h1><p className="muted">{good.code} · {good.name}</p></div><a className="softbutton" href="/">返回系统</a></div>
     {error && <p className="error">{error}</p>}
-    {documentHtml && <iframe title="标签预览与打印" srcDoc={documentHtml} style={{ width: '100%', minHeight: 580, border: '1px solid #c8d9d2', borderRadius: 14, background: 'white' }} />}
+    {documentHtml && <iframe title="标签预览与打印" srcDoc={documentHtml} style={{ width: '100%', minHeight: 580, border: '1px solid rgba(11,59,51,.12)', borderRadius: 14, background: 'white' }} />}
   </main>;
 }

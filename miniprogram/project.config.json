@@ -1,5 +1,6 @@
 {
-  "appid": "touristappid",
+  "description": "翠账：翡翠摊主管货与对账",
+  "appid": "wxaf85fc57f05e003a",
   "projectname": "翠账-微信小程序",
   "miniprogramRoot": "./",
   "compileType": "miniprogram",

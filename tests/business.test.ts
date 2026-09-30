@@ -16,8 +16,8 @@ beforeAll(async () => {
   const pass=await bcrypt.hash('test-only',4);
   const user=await db.user.create({data:{merchantId:merchant.id,login:code(),name:'老板',role:'OWNER',passwordHash:pass}});
   const user2=await db.user.create({data:{merchantId:merchant.id,login:code(),name:'员工',role:'STAFF',passwordHash:pass,permissions:{goods:true,loans:true,partnersRead:true}}});
-  boss={id:user.id,merchantId:merchant.id,name:user.name,role:user.role,permissions:user.permissions,active:true};
-  staff={id:user2.id,merchantId:merchant.id,name:user2.name,role:user2.role,permissions:user2.permissions,active:true};
+  boss={id:user.id,merchantId:merchant.id,name:user.name,role:user.role,permissions:user.permissions,active:true,tokenVersion:0};
+  staff={id:user2.id,merchantId:merchant.id,name:user2.name,role:user2.role,permissions:user2.permissions,active:true,tokenVersion:0};
   customer=await db.partner.create({data:{merchantId:merchant.id,name:'客户A',roles:['CUSTOMER']}});
   staff={...staff,permissions:{goods:true,loans:true,partnersRead:true,customerIds:[customer.id]}};
   await db.user.update({where:{id:user2.id},data:{permissions:{goods:true,loans:true,partnersRead:true,customerIds:[customer.id]}}});

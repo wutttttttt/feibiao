@@ -3,7 +3,7 @@ const URL_KEY = 'feicui.mini.url';
 
 function baseUrl() { return String(wx.getStorageSync(URL_KEY) || 'http://127.0.0.1:3000').replace(/\/$/, ''); }
 function token() { return wx.getStorageSync(KEY) || ''; }
-function idempotencyKey() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+function idempotencyKey(path, data) { return `${path}|${JSON.stringify(data||{})}`; }
 function money(yuan) { return yuan == null ? '—' : `¥${Number(yuan).toFixed(2)}`; }
 function fail(error) { wx.showToast({ title: error.message || '操作失败', icon: 'none', duration: 2500 }); }
 function ensureLogin() {
@@ -21,7 +21,7 @@ function request(path, method = 'GET', data, useToken = true) {
         'content-type': 'application/json',
         'x-client': 'wechat-mini',
         ...(useToken && auth ? { Authorization: `Bearer ${auth}` } : {}),
-        ...(method === 'POST' ? { 'Idempotency-Key': idempotencyKey() } : {})
+        ...(method === 'POST' ? { 'Idempotency-Key': idempotencyKey(path, data) } : {})
       },
       success(res) {
         if (res.statusCode >= 200 && res.statusCode < 300) return resolve(res.data);

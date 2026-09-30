@@ -10,10 +10,12 @@ function key() {
   return new TextEncoder().encode(value);
 }
 export async function issueMiniToken(userId: string) {
-  return new SignJWT({ uid: userId, client: 'wechat-mini' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('12h').sign(key());
+  const user = await db.user.findUnique({ where: { id: userId }, select: { tokenVersion: true } });
+  return new SignJWT({ uid: userId, client: 'wechat-mini', v: user?.tokenVersion ?? 0 }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('12h').sign(key());
 }
 export async function createSession(userId: string) {
-  const token = await new SignJWT({ uid: userId }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('7d').sign(key());
+  const user = await db.user.findUnique({ where: { id: userId }, select: { tokenVersion: true } });
+  const token = await new SignJWT({ uid: userId, v: user?.tokenVersion ?? 0 }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt().setExpirationTime('7d').sign(key());
   (await cookies()).set(cookieName, token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 7 * 86400 });
 }
 export async function clearSession() { (await cookies()).delete(cookieName); }
@@ -25,8 +27,10 @@ export async function currentUser() {
     const { payload } = await jwtVerify(token, key());
     if (typeof payload.uid !== 'string') return null;
     if (bearer && payload.client !== 'wechat-mini') return null;
-    const user = await db.user.findUnique({ where: { id: payload.uid }, select: { id: true, merchantId: true, name: true, role: true, permissions: true, active: true } });
-    return user?.active ? user : null;
+    const user = await db.user.findUnique({ where: { id: payload.uid }, select: { id: true, merchantId: true, name: true, role: true, permissions: true, active: true, tokenVersion: true } });
+    if (!user?.active) return null;
+    if (payload.v !== user.tokenVersion) return null;
+    return user;
   } catch { return null; }
 }
 export type Actor = NonNullable<Awaited<ReturnType<typeof currentUser>>>;

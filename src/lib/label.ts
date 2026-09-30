@@ -10,9 +10,9 @@ export function labelDocument(good: LabelGood, barcodeSvg: string) {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>货品标签 ${code}</title>
 <style id="paper-style">@page{size:70mm 40mm;margin:0}.label{width:70mm;height:40mm}</style>
 <style>
-*{box-sizing:border-box}body{margin:0;color:#111;font-family:Arial,"Microsoft YaHei",sans-serif;background:#eef2ef}
-.toolbar{padding:18px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.toolbar button,.toolbar select{font:16px sans-serif;padding:8px 12px}.toolbar p{flex-basis:100%;margin:0;color:#555;font-size:13px}
+*{box-sizing:border-box}body{margin:0;color:#1A3C33;font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:#F6F8F4}
+.toolbar{padding:18px;background:#fff;border-bottom:1px solid #E3ECE6;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.toolbar button,.toolbar select{font:16px sans-serif;padding:8px 12px}.toolbar p{flex-basis:100%;margin:0;color:#5F7A6E;font-size:13px}
 .sheet{padding:28px}.label{background:white;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;break-inside:avoid}
 .name{font-size:12pt;font-weight:700;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.code{font-size:10pt;font-weight:700;letter-spacing:.2px;white-space:nowrap}
 .barcode{width:100%;height:17mm;display:flex;align-items:center;justify-content:center}.barcode svg{width:100%;height:100%;max-width:100%}

@@ -1,0 +1,1 @@
+ALTER TABLE "ShareLink" ADD COLUMN "lastFailedAt" TIMESTAMP(3);
